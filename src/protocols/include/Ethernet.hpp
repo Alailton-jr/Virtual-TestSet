@@ -1,10 +1,12 @@
 #ifndef ETHERNET_HPP
 #define ETHERNET_HPP
 
-#include <string>
 #include <vector>
-#include <stdexcept>
+#include <string>
 #include <inttypes.h>
+
+#include <stdexcept>
+
 
 class Ethernet {
 public:
@@ -36,8 +38,6 @@ public:
         return encoded;
     }
 };
-
-
 
 
 #endif // ETHERNET_HPP

@@ -6,7 +6,8 @@
 #include <optional>
 #include <unordered_map>
 #include <inttypes.h>
-#include <cstring>  
+#include <cstring>
+#include <stdexcept>
 
 #include "IEC61850_Types.hpp"
 

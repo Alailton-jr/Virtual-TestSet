@@ -8,6 +8,7 @@
 #include <cstring>
 
 
+
 class UtcTime {
 public:
     uint32_t seconds;
@@ -221,7 +222,7 @@ public:
                 encoded.push_back(0x88);
                 {
                     std::vector<uint8_t> realEncoded(4);
-                    std::memcpy(realEncoded.data(), &real.value(), 4);
+                    memcpy(realEncoded.data(), &real.value(), 4);
                     encoded.insert(encoded.end(), realEncoded.begin(), realEncoded.end());
                 }
                 break;
@@ -278,6 +279,5 @@ public:
         return encoded;
     }
 };
-
 
 #endif // IEC61850_TYPES_HPP
