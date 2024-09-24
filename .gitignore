@@ -62,3 +62,6 @@ install_manifest.txt
 .vscode
 /cmake-build-debug/
 .idea
+
+
+/**/*.csv

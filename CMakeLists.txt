@@ -13,6 +13,8 @@ set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/build)
 add_subdirectory(src/main)
 add_subdirectory(src/protocols)
 add_subdirectory(src/tools)
+add_subdirectory(src/sampledValue)
+
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/files
     DESTINATION ${CMAKE_CURRENT_BINARY_DIR})

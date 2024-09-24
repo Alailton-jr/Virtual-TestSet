@@ -1,41 +1,33 @@
 
 #include "main.hpp"
-#include "Ethernet.hpp"
-#include "Goose.hpp"
-#include "SampledValue.hpp"
 #include "raw_socket.hpp"
-#include "Virtual_LAN.hpp"
 
-class SampledValue_Config{
-public:
+#include "Protocols.hpp"
+#include "sv_sender.hpp"
 
-    std::string srcMac = "01:0c:cd:04:00:01";
-    std::string dstMac;
+// Testing getDataFromCsv
+#include <fstream>
+#include <sstream>
+#include <vector>
 
-    uint16_t vlanId = 0x8100;
-    uint8_t vlanPcp = 0;
-    uint8_t vlanDei = 0;
+#include <math.h>
 
-    uint16_t appID;
-    uint8_t noAsdu;
-    std::string svID;
-    uint16_t smpCnt;
-    uint32_t confRev;
-    uint8_t smpSynch;
-    uint16_t smpMod;
+void plotIt(std::vector<double> x, std::vector<double> y){
 
-    RawSocket raw_socket;
+    std::ofstream dataFile("data.txt");
 
-public:
-    SampledValue_Config(){
-        this->dstMac = GetMACAddress(IF_NAME);
+    for (size_t i = 0; i < x.size(); ++i) {
+        dataFile << x[i] << " " << y[i] << std::endl;
     }
-};
 
 
-int main(){
+    dataFile.close();
+    system("gnuplot -e 'set terminal pdf; set output \"plot.pdf\"; plot \"data.txt\" with lines'");
+    remove("data.txt");
+}
 
-    std::cout << "Hello World!" << std::endl;
+
+void test_sampledValue_Pkt(){
 
     std::vector<uint8_t> base_pkt;
     
@@ -49,17 +41,17 @@ int main(){
     sv_conf->smpSynch = 0x01;
 
     // Ethernet
-    Ethernet eth(sv_conf->srcMac, sv_conf->dstMac);
+    Protocols::Ethernet eth(sv_conf->srcMac, sv_conf->dstMac);
     auto encoded_eth = eth.getEncoded();
     base_pkt.insert(base_pkt.end(), encoded_eth.begin(), encoded_eth.end());
 
     // Virtual LAN
-    Virtual_LAN vlan(sv_conf->vlanId, sv_conf->vlanPcp, sv_conf->vlanDei);
+    Protocols::Virtual_LAN vlan(sv_conf->vlanId, sv_conf->vlanPcp, sv_conf->vlanDei);
     auto encoded_vlan = vlan.getEncoded();
     base_pkt.insert(base_pkt.end(), encoded_vlan.begin(), encoded_vlan.end());
 
     // SampledValue
-    SampledValue sv(
+    Protocols::SampledValue sv(
         sv_conf->appID,
         sv_conf->noAsdu,
         sv_conf->svID,
@@ -76,16 +68,44 @@ int main(){
     // Send the packet
     RawSocket raw_socket;
 
-    sv_conf->raw_socket.iov.iov_base = (void*)base_pkt.data();
-    sv_conf->raw_socket.iov.iov_len = base_pkt.size();
+    raw_socket.iov.iov_base = (void*)base_pkt.data();
+    raw_socket.iov.iov_len = base_pkt.size();
 
     int smpCount = sv.getParamPos(1, "smpCnt") + idx_SV_Start;
     base_pkt[smpCount] = 0x00;
     base_pkt[smpCount + 1] = 0x4;
 
     for (int i = 0; i < 100; i++){
-        sendmsg(sv_conf->raw_socket.socket_id, &sv_conf->raw_socket.msg_hdr, 0);
+        sendmsg(raw_socket.socket_id, &raw_socket.msg_hdr, 0);
     }
+
+}
+
+void csvTest(){
+
+    auto x = getDataFromCsv("src/files/output.csv");
+
+    std::cout << x[0][1] << " | " << x[0][0] << std::endl;
+
+    float fs = 1/(x[0][1] - x[0][0]);
+    std::cout << fs << std::endl;
+    std::vector<std::vector<double>> resampled = resample(x, fs, 4800);
+
+    std::vector<double> time;
+    for (int i=0;i<resampled[0].size(); i++){
+        time.push_back(i);
+    }
+
+    plotIt(time, resampled[1] );
+
+}
+
+
+int main(){
+
+    std::cout << "Hello World!" << std::endl;
+
+    
 
     return 0;
 }

@@ -1,9 +1,9 @@
 
 
-project(tests)
+project(sampledValue)
 
 add_library(${PROJECT_NAME} 
-    src/transient.cpp
+    src/sv_sender.cpp
 )
 
 target_include_directories( ${PROJECT_NAME}
@@ -14,5 +14,4 @@ target_include_directories( ${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME}
     PUBLIC
         tools
-        sampledValue
 )
