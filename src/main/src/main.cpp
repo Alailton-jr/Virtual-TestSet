@@ -5,6 +5,8 @@
 #include "Protocols.hpp"
 #include "sv_sender.hpp"
 
+#include "tests.hpp"
+
 // Testing getDataFromCsv
 #include <fstream>
 #include <sstream>
@@ -25,7 +27,6 @@ void plotIt(std::vector<double> x, std::vector<double> y){
     system("gnuplot -e 'set terminal pdf; set output \"plot.pdf\"; plot \"data.txt\" with lines'");
     remove("data.txt");
 }
-
 
 void test_sampledValue_Pkt(){
 
@@ -81,31 +82,68 @@ void test_sampledValue_Pkt(){
 
 }
 
-void csvTest(){
+void testTransient(){
+    
+    transient_config tran_conf;
 
-    auto x = getDataFromCsv("src/files/output.csv");
+    tran_conf.channelConfig = {
+        // {0,1}, {1,2}, {2,3}, {4,4}, {5,5}, {6,6}
+        {0,6}, {1,5}, {2,4}, {4,3}, {5,2}, {6,1}
+    };
+    tran_conf.file_data_fs = 9600;
+    tran_conf.fileName = "files/noFault.csv";
+    tran_conf.interval = 0;
+    tran_conf.interval_flag = 0;
+    tran_conf.loop_flag = 1;
+    tran_conf.scale = {1,1,1,1,1,1,1,1};
 
-    std::cout << x[0][1] << " | " << x[0][0] << std::endl;
 
-    float fs = 1/(x[0][1] - x[0][0]);
-    std::cout << fs << std::endl;
-    std::vector<std::vector<double>> resampled = resample(x, fs, 4800);
+    //SV Config 
+    tran_conf.sv_config.appID = 0x4000;
+    tran_conf.sv_config.confRev = 1;
+    tran_conf.sv_config.dstMac = "01-0C-CD-04-00-01";
+    tran_conf.sv_config.noAsdu = 1;
+    tran_conf.sv_config.smpCnt = 0;
+    tran_conf.sv_config.smpMod = 0;
+    tran_conf.sv_config.smpRate = 4800;
+    tran_conf.sv_config.smpSynch = 1;
+    tran_conf.sv_config.svID = "SV_01";
+    tran_conf.sv_config.vlanDei = 0;
+    tran_conf.sv_config.vlanId = 100;
+    tran_conf.sv_config.vlanPcp = 4;
+    tran_conf.sv_config.noChannels = 8;
 
-    std::vector<double> time;
-    for (int i=0;i<resampled[0].size(); i++){
-        time.push_back(i);
-    }
+    Tests_Class test;
 
-    plotIt(time, resampled[1] );
+    test.start_transient_test({tran_conf});
 
+
+    sleep(120);
+    test.stop_transient_test();
 }
 
+void test_Sniffer(){
+
+    TestSet_Class testSet;
+
+    Goose_info goInfo = {
+        .goCbRef = "",
+        .mac_dst = {0x01, 0x0c, 0xcd, 0x01, 0x00, 0x01},
+        .input = {{0,0},{1,1}}
+    };
+
+    testSet.sniffer.startThread({goInfo});
+    sleep(15);
+    testSet.sniffer.stopThread();
+}
 
 int main(){
 
     std::cout << "Hello World!" << std::endl;
 
-    
+
+    test_Sniffer();
+    // testTransient();
 
     return 0;
 }

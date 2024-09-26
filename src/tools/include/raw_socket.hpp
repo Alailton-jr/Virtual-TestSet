@@ -127,7 +127,7 @@ private:
 
 
 
-const std::string GetMACAddress(const char* interface) {
+inline const std::string GetMACAddress(const char* interface) {
     struct ifaddrs *ifaddr, *ifa;
     unsigned char *mac;
     std::ostringstream macAddressStream;

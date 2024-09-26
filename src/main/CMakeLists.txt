@@ -9,6 +9,8 @@ target_link_libraries(${PROJECT_NAME}
     protocols
     tools
     sampledValue
+    tests
+    sniffer
 )
 
 target_include_directories( ${PROJECT_NAME}

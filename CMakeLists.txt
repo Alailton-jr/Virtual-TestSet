@@ -14,6 +14,8 @@ add_subdirectory(src/main)
 add_subdirectory(src/protocols)
 add_subdirectory(src/tools)
 add_subdirectory(src/sampledValue)
+add_subdirectory(src/tests)
+add_subdirectory(src/sniffer)
 
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/files

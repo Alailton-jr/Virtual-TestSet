@@ -2,6 +2,8 @@
 #define TIMERS_HPP
 
 #include <time.h>
+#include <iostream>
+
 
 class Timer{
 public:
@@ -18,6 +20,11 @@ public:
     void start_period(long period_ns) {
         clock_gettime(CLOCK_MONOTONIC, &next_period);
         increment_period(period_ns);
+    }
+
+    void start_period(struct timespec initial_time) {
+        next_period.tv_sec = initial_time.tv_sec;
+        next_period.tv_nsec = initial_time.tv_nsec;
     }
 
     void wait_period(long period_ns) {

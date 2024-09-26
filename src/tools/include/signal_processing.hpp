@@ -4,7 +4,7 @@
 #include <vector>
 #include <cmath>
 
-std::vector<std::vector<double>> resample(std::vector<std::vector<double>> data, float fs, float new_fs){
+inline  std::vector<std::vector<double>> resample(std::vector<std::vector<double>> data, float fs, float new_fs){
 
     std::vector<std::vector<double>> data_resampled;
 

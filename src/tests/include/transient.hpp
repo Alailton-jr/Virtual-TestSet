@@ -1,12 +1,12 @@
 #ifndef TRANSIENT_HPP
 #define TRANSIENT_HPP
 
-#include <pthread.h>
-#include <string>
-#include <inttypes.h>
 #include <vector>
-
+#include <inttypes.h>
 #include "sv_sender.hpp"
+#include <pthread.h>
+#include "raw_socket.hpp"
+
 
 struct transient_config{
 
@@ -15,12 +15,12 @@ struct transient_config{
     uint8_t interval_flag;
     double interval;
 
-
-    uint8_t noChannels;
-    std::vector<uint8_t[2]> channelConfig;
+    std::vector<std::vector<uint8_t>> channelConfig;
     std::vector<double> scale;
     double file_data_fs;
     SampledValue_Config sv_config;
+
+    RawSocket* socket;
     
 
     int stop, running, error;

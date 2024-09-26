@@ -12,6 +12,7 @@ public:
 
     // Sender information
     uint16_t smpRate;
+    uint16_t noChannels;
     RawSocket* raw_socket;
 
     // Ethernet PKT
