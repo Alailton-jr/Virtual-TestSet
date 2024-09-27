@@ -131,10 +131,11 @@ void test_Sniffer(){
 
     testSet.sniffer.startThread({goInfo});
 
-    for (int i=0;i<20;i++){
+    for (int i=0;i<30;i++){
         testSet.tests.start_transient_test({tran_conf});
-        sleep(5);
-        testSet.tests.stop_transient_test();
+        while(testSet.tests.transient_tests[0].stop != 1){
+            sleep(1);
+        }
     }
 
     testSet.sniffer.stopThread();
@@ -154,9 +155,6 @@ void testProtection (){
     testSet.sniffer.startThread({goInfo});
     sleep(15);
     
-
-
-
     testSet.sniffer.stopThread();
 }
 
@@ -166,7 +164,7 @@ int main(){
     std::cout << "Hello World!" << std::endl;
 
     test_Sniffer();
-    testTransient();
+    // testTransient();
 
     return 0;
 }

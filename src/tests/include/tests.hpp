@@ -65,9 +65,9 @@ inline  Sv_packet get_sampledValue_pkt_info(SampledValue_Config& svConf){
 class Tests_Class{
 public:
     std::vector<uint8_t>* digital_input;
-
-private:
     std::vector<transient_config> transient_tests;
+private:
+    
     uint8_t priority = 80;
 
 public:
