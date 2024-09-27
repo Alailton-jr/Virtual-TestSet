@@ -63,13 +63,16 @@ inline  Sv_packet get_sampledValue_pkt_info(SampledValue_Config& svConf){
 }
 
 class Tests_Class{
+public:
+    std::vector<uint8_t>* digital_input;
 
+private:
     std::vector<transient_config> transient_tests;
     uint8_t priority = 80;
 
 public:
 
-    RawSocket* raw_socket;
+    RawSocket raw_socket;
     Tests_Class(){
         
     }
@@ -85,7 +88,8 @@ public:
         }
 
         for (auto& conf: transient_tests){
-            conf.socket = raw_socket;
+            conf.socket = &this->raw_socket;
+            conf.digital_input = this->digital_input;
             pthread_create(&conf.thd, NULL, run_transient_test, static_cast<void*>(&conf));
             pthread_setschedparam(conf.thd, SCHED_FIFO, &param);
         }

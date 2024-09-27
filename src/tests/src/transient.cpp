@@ -10,6 +10,9 @@
 #include <fstream>
 #include <sstream>
 
+std::vector<uint8_t>* digital_input;
+
+
 struct transient_plan{
     void (*_execute)(transient_plan* plan);
     void execute(){
@@ -188,10 +191,12 @@ void loop_replay(transient_plan* plan){
     int smpCount = 0;
     ssize_t sizeSented = 0;
 
+    int n_stop = 0;
+
     updatePkt(plan->buffer, plan->sv_info, buffer_idx, smpCount);
     timer.start_period(t_ini);
     timer.wait_period(waitPeriod);
-    while (!*plan->stop){
+    while ((!*plan->stop) && (!(*digital_input)[0])){
         sizeSented = sendmsg(plan->socket->socket_id, &plan->socket->msg_hdr, 0);
         updatePkt(plan->buffer, plan->sv_info, buffer_idx, smpCount);
         timer.wait_period(waitPeriod);
@@ -202,7 +207,6 @@ void loop_replay(transient_plan* plan){
     plan->time_ended = t_end.tv_sec + t_end.tv_nsec * 1e-9;
 
     return;
-
 }
 
 void interval_replay(transient_plan* plan){
@@ -240,6 +244,9 @@ void* run_transient_test(void* arg){
     conf->running = 1;
     conf->stop = 0;
 
+    //Only for test
+    digital_input = conf->digital_input;
+
     std::vector<std::vector<int32_t>> buffer = getTransientData(conf);
     Sv_packet sv_info = get_sampledValue_pkt_info(conf->sv_config);
     transient_plan plan = create_plan(conf, &buffer, &sv_info, conf->socket);
@@ -250,6 +257,8 @@ void* run_transient_test(void* arg){
     try{
         plan.execute(); 
     }catch(...){}
+
+    std::cout << "Trip Time: " << plan.time_ended - plan.time_started << std::endl;
 
     conf->running = 0;
     return nullptr;

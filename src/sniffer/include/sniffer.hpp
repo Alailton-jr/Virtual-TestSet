@@ -16,7 +16,7 @@
 struct Goose_info{
     std::string goCbRef;
     std::vector<uint8_t> mac_dst;
-    std::vector<std::vector<uint8_t>> input;
+    std::vector<std::vector<uint8_t>> input;  // {Digital Input POS, GOOSE data pos}
 };
 
 void* SnifferThread(void* arg);
@@ -30,7 +30,7 @@ public:
 
     pthread_t thd;
 
-    RawSocket* socket;
+    RawSocket socket;
     std::vector<uint8_t>* digitalInput;
     std::vector<Goose_info> goInfo;
 

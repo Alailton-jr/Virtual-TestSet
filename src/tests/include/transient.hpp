@@ -21,6 +21,7 @@ struct transient_config{
     SampledValue_Config sv_config;
 
     RawSocket* socket;
+    std::vector<uint8_t>* digital_input;
     
 
     int stop, running, error;

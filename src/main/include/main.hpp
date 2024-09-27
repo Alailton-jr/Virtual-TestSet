@@ -17,9 +17,20 @@ public:
 
     RawSocket socket;
 
+    std::vector<uint8_t> digital_input;
+
     TestSet_Class(){
-        this->tests.raw_socket = &socket;
-        this->sniffer.socket = &socket;
+        // Initialization
+        this->digital_input.resize(16);
+
+        // Tests
+        // this->tests.raw_socket = &socket;
+        //Sniffer
+        // this->sniffer.socket = &socket;
+        this->sniffer.digitalInput = &digital_input;
+        this->tests.digital_input = &digital_input;
+
+        
     }
 
 

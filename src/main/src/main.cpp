@@ -84,6 +84,21 @@ void test_sampledValue_Pkt(){
 
 void testTransient(){
     
+    
+}
+
+void test_Sniffer(){
+
+    TestSet_Class testSet;
+
+    // Sniffer
+    Goose_info goInfo = {
+        .goCbRef = "GCBR_01",
+        .mac_dst = {0x01, 0x0c, 0xcd, 0x01, 0x00, 0x01},
+        .input = {{0,0}}
+    };
+    
+    // Transient
     transient_config tran_conf;
 
     tran_conf.channelConfig = {
@@ -91,12 +106,12 @@ void testTransient(){
         {0,6}, {1,5}, {2,4}, {4,3}, {5,2}, {6,1}
     };
     tran_conf.file_data_fs = 9600;
-    tran_conf.fileName = "files/noFault.csv";
+    // tran_conf.fileName = "files/noFault.csv";
+    tran_conf.fileName = "files/Fault_50.csv";
     tran_conf.interval = 0;
     tran_conf.interval_flag = 0;
     tran_conf.loop_flag = 1;
-    tran_conf.scale = {1,1,1,1,1,1,1,1};
-
+    tran_conf.scale = {1000,1000,1000,1000,1000,1000,1000,1000};
 
     //SV Config 
     tran_conf.sv_config.appID = 0x4000;
@@ -113,37 +128,45 @@ void testTransient(){
     tran_conf.sv_config.vlanPcp = 4;
     tran_conf.sv_config.noChannels = 8;
 
-    Tests_Class test;
 
-    test.start_transient_test({tran_conf});
+    testSet.sniffer.startThread({goInfo});
 
+    for (int i=0;i<20;i++){
+        testSet.tests.start_transient_test({tran_conf});
+        sleep(5);
+        testSet.tests.stop_transient_test();
+    }
 
-    sleep(120);
-    test.stop_transient_test();
+    testSet.sniffer.stopThread();
 }
 
-void test_Sniffer(){
+
+void testProtection (){
 
     TestSet_Class testSet;
 
     Goose_info goInfo = {
-        .goCbRef = "",
+        .goCbRef = "GCBR_01",
         .mac_dst = {0x01, 0x0c, 0xcd, 0x01, 0x00, 0x01},
-        .input = {{0,0},{1,1}}
+        .input = {{0,0}}
     };
 
     testSet.sniffer.startThread({goInfo});
     sleep(15);
+    
+
+
+
     testSet.sniffer.stopThread();
 }
+
 
 int main(){
 
     std::cout << "Hello World!" << std::endl;
 
-
     test_Sniffer();
-    // testTransient();
+    testTransient();
 
     return 0;
 }
