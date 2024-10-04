@@ -78,6 +78,7 @@ void process_GOOSE_packet(uint8_t* frame, ssize_t frameSize, int i){
 
         j += frame[i+j+1] + 2;
     }
+    if (goIdx == -1) return;
     i += j;
     std::vector<uint8_t> boolDat;
     j = 2;
