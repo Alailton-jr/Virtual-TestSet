@@ -249,6 +249,10 @@ void* run_transient_test(void* arg){
     digital_input = conf->digital_input;
 
     std::vector<std::vector<int32_t>> buffer = getTransientData(conf);
+    if (buffer.empty()){
+        conf->running = 0;
+        return nullptr;
+    }
     Sv_packet sv_info = get_sampledValue_pkt_info(conf->sv_config);
     transient_plan plan = create_plan(conf, &buffer, &sv_info, conf->socket);
 
