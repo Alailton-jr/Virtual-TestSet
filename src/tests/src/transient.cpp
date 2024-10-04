@@ -132,7 +132,7 @@ int updatePkt(std::vector<std::vector<int32_t>>* buffer, Sv_packet* pkt_info, in
 void simple_replay(transient_plan* plan){
 
     Timer timer;
-    struct timespec t_ini, t_end;
+    struct timespec t_ini, t_end, t0, t1;
 
     long waitPeriod = (long)(1e9/plan->sv_info->smpRate);
 
@@ -154,6 +154,7 @@ void simple_replay(transient_plan* plan){
     updatePkt(plan->buffer, plan->sv_info, buffer_idx, smpCount);
     timer.start_period(t_ini);
     timer.wait_period(waitPeriod);
+    clock_gettime(CLOCK_MONOTONIC, &t0);
     while (!*plan->stop){
         sizeSented = sendmsg(plan->socket->socket_id, &plan->socket->msg_hdr, 0);
         if (updatePkt(plan->buffer, plan->sv_info, buffer_idx, smpCount)){
@@ -161,10 +162,10 @@ void simple_replay(transient_plan* plan){
         }
         timer.wait_period(waitPeriod);
     }
-
+    clock_gettime(CLOCK_MONOTONIC, &t1);
     clock_gettime(CLOCK_MONOTONIC, &t_end);
-    plan->time_started = t_ini.tv_sec + t_ini.tv_nsec * 1e-9;
-    plan->time_ended = t_end.tv_sec + t_end.tv_nsec * 1e-9;
+    plan->time_started = t0.tv_sec + t0.tv_nsec * 1e-9;
+    plan->time_ended = t1.tv_sec + t1.tv_nsec * 1e-9;
 
     return;
 }
@@ -172,7 +173,7 @@ void simple_replay(transient_plan* plan){
 void loop_replay(transient_plan* plan){
 
     Timer timer;
-    struct timespec t_ini, t_end;
+    struct timespec t_ini, t_end, t0, t1;
 
     long waitPeriod = (long)(1e9/plan->sv_info->smpRate);
 
@@ -196,15 +197,15 @@ void loop_replay(transient_plan* plan){
     updatePkt(plan->buffer, plan->sv_info, buffer_idx, smpCount);
     timer.start_period(t_ini);
     timer.wait_period(waitPeriod);
+    clock_gettime(CLOCK_MONOTONIC, &t0);
     while ((!*plan->stop) && (!(*digital_input)[0])){
         sizeSented = sendmsg(plan->socket->socket_id, &plan->socket->msg_hdr, 0);
         updatePkt(plan->buffer, plan->sv_info, buffer_idx, smpCount);
         timer.wait_period(waitPeriod);
     }
-
-    clock_gettime(CLOCK_MONOTONIC, &t_end);
-    plan->time_started = t_ini.tv_sec + t_ini.tv_nsec * 1e-9;
-    plan->time_ended = t_end.tv_sec + t_end.tv_nsec * 1e-9;
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    plan->time_started = t0.tv_sec + t0.tv_nsec * 1e-9;
+    plan->time_ended = t1.tv_sec + t1.tv_nsec * 1e-9;
 
     return;
 }

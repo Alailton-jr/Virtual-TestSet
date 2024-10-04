@@ -107,11 +107,11 @@ void test_Sniffer(){
     };
     tran_conf.file_data_fs = 9600;
     // tran_conf.fileName = "files/noFault.csv";
-    tran_conf.fileName = "files/Fault_50.csv";
+    tran_conf.fileName = "files/Fault_main.csv";
     tran_conf.interval = 0;
     tran_conf.interval_flag = 0;
     tran_conf.loop_flag = 1;
-    tran_conf.scale = {1000,1000,1000,1000,1000,1000,1000,1000};
+    tran_conf.scale = {1,1,1,1,1,1,1,1};
 
     //SV Config 
     tran_conf.sv_config.appID = 0x4000;
@@ -133,7 +133,7 @@ void test_Sniffer(){
 
     for (int i=0;i<30;i++){
         testSet.tests.start_transient_test({tran_conf});
-        while(testSet.tests.transient_tests[0].stop != 1){
+        while(testSet.tests.transient_tests[0].running == 1){
             sleep(1);
         }
     }
