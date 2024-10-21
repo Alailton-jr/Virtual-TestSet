@@ -95,7 +95,7 @@ void test_Sniffer(){
     Goose_info goInfo = {
         .goCbRef = "GCBR_01",
         .mac_dst = {0x01, 0x0c, 0xcd, 0x01, 0x00, 0x01},
-        .input = {{0,0}}
+        .input = {{0,0}, {1,1}}
     };
     
     // Transient
@@ -111,7 +111,7 @@ void test_Sniffer(){
     tran_conf.interval = 0;
     tran_conf.interval_flag = 0;
     tran_conf.loop_flag = 1;
-    tran_conf.scale = {1,1,1,1,1,1,1,1};
+    tran_conf.scale = {1,1,1,1,1,1,1,1}; 
 
     //SV Config 
     tran_conf.sv_config.appID = 0x4000;
@@ -133,6 +133,7 @@ void test_Sniffer(){
 
     for (int i=0;i<30;i++){
         testSet.tests.start_transient_test({tran_conf});
+        sleep(1);
         while(testSet.tests.transient_tests[0].running == 1){
             sleep(1);
         }

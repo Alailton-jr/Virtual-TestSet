@@ -154,7 +154,6 @@ void* SnifferThread(void* arg){
 
     RawSocket* raw_socket = &sniffer_conf->socket;
     // ThreadPool<void(task_arg*)> pool(sniffer_conf->noThreads, sniffer_conf->noTasks, sniffer_conf->priority);
-
     // Variables used for decoding and the Thread Pool 
     uint8_t args_buff[Sniffer_NoTasks+1][Sniffer_RxSize];
     ssize_t rx_bytes;
