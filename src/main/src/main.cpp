@@ -11,6 +11,7 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
+#include <string>
 
 #include <math.h>
 
@@ -91,12 +92,7 @@ void test_Sniffer(){
 
     TestSet_Class testSet;
 
-    // Sniffer
-    Goose_info goInfo = {
-        .goCbRef = "GCBR_01",
-        .mac_dst = {0x01, 0x0c, 0xcd, 0x01, 0x00, 0x01},
-        .input = {{0,0}, {1,1}}
-    };
+    
     
     // Transient
     transient_config tran_conf;
@@ -110,7 +106,7 @@ void test_Sniffer(){
     tran_conf.fileName = "files/Fault_main.csv";
     tran_conf.interval = 0;
     tran_conf.interval_flag = 0;
-    tran_conf.loop_flag = 1;
+    tran_conf.loop_flag = 0;
     tran_conf.scale = {1,1,1,1,1,1,1,1}; 
 
     //SV Config 
@@ -128,18 +124,64 @@ void test_Sniffer(){
     tran_conf.sv_config.vlanPcp = 4;
     tran_conf.sv_config.noChannels = 8;
 
+    std::vector<int> angs = {0, 45, 90};//{0, 45, 90}
+    std::vector<int> ress = {50};//{0, 15, 30, 50};//{0, 15, 30, 50};
+    double trip_time = 0;
+    tran_conf.trip_time = &trip_time;
 
-    testSet.sniffer.startThread({goInfo});
+    for (const auto& ang : angs) {
+        for (const auto& res : ress) {
+        
+            std::cout << "Ang: " << ang << std::endl;
+            std::cout << "Resistence: " << res << std::endl;
+            for (uint8_t j=3;j<5;j++){
+                if (j == 2) continue;
+                // Sniffer
+                Goose_info goInfo = {
+                    .goCbRef = "GCBR_01",
+                    .mac_dst = {0x01, 0x0c, 0xcd, 0x01, 0x00, 0x01},
+                    .input = {{0,j}, {1,1}}
+                };
+                if (j == 0) std::cout<< "PIOC" << std::endl;
+                else if (j == 1) std::cout<< "PTOC" << std::endl;
+                else if (j == 2) std::cout<< "PTOV" << std::endl;
+                else if (j == 3) std::cout<< "PTUV" << std::endl;
+                else if (j == 4) std::cout<< "PDIS" << std::endl;
 
-    for (int i=0;i<30;i++){
-        testSet.tests.start_transient_test({tran_conf});
-        sleep(1);
-        while(testSet.tests.transient_tests[0].running == 1){
-            sleep(1);
+                std::string protName = "";
+                if (j == 0) protName = "PIOC";
+                else if (j == 1) protName = "PTOC";
+                else if (j == 2) protName = "PTOV";
+                else if (j == 3) protName = "PTUV";
+                else if (j == 4) protName = "PDIS";
+                std::string fileName = protName + "_ang_" + std::to_string(ang)+ "_res_" + std::to_string(res) + ".txt";
+                std::ofstream file = std::ofstream(fileName);
+
+                testSet.sniffer.startThread({goInfo});
+                for (int i=0;i<50;i++){
+                    tran_conf.fileName = "files/Fault_main_" + std::to_string(ang) + "_" + std::to_string(res) + ".csv";
+                    testSet.tests.start_transient_test({tran_conf});
+                    sleep(1);
+                    while(testSet.tests.transient_tests[0].running == 1){
+                        sleep(1);
+                    }
+                    std::cout<< trip_time << std::endl;
+                    file << trip_time << std::endl;
+                    tran_conf.fileName = "files/noFault.csv";
+                    testSet.tests.start_transient_test({tran_conf});
+                    sleep(1);
+                    while(testSet.tests.transient_tests[0].running == 1){
+                        sleep(1);
+                    }
+                    // break;
+                }
+                testSet.sniffer.stopThread();
+                file.close();
+            }
+
         }
     }
-
-    testSet.sniffer.stopThread();
+    
 }
 
 

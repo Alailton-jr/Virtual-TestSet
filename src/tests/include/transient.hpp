@@ -15,6 +15,8 @@ struct transient_config{
     uint8_t interval_flag;
     double interval;
 
+    double* trip_time;
+
     std::vector<std::vector<uint8_t>> channelConfig;
     std::vector<double> scale;
     double file_data_fs;

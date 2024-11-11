@@ -147,10 +147,10 @@ void* SnifferThread(void* arg){
     }
     sniffer = sniffer_conf;
 
-    for (int i=0;i<6;i++){
-        std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(registeredMACs[0][i]) << " ";
-    }
-    std::cout << std::endl;
+    // for (int i=0;i<6;i++){
+    //     std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(registeredMACs[0][i]) << " ";
+    // }
+    // std::cout << std::endl;
 
     RawSocket* raw_socket = &sniffer_conf->socket;
     // ThreadPool<void(task_arg*)> pool(sniffer_conf->noThreads, sniffer_conf->noTasks, sniffer_conf->priority);

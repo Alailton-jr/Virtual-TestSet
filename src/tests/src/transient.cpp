@@ -150,16 +150,19 @@ void simple_replay(transient_plan* plan){
     int buffer_idx = 0;
     int smpCount = 0;
     ssize_t sizeSented = 0;
+    long nPkts = 0;
+    
 
     updatePkt(plan->buffer, plan->sv_info, buffer_idx, smpCount);
     timer.start_period(t_ini);
     timer.wait_period(waitPeriod);
     clock_gettime(CLOCK_MONOTONIC, &t0);
-    while (!*plan->stop){
+    while ((!*plan->stop) && (!(*digital_input)[0]) || nPkts < 4800){
         sizeSented = sendmsg(plan->socket->socket_id, &plan->socket->msg_hdr, 0);
         if (updatePkt(plan->buffer, plan->sv_info, buffer_idx, smpCount)){
             break;
         }
+        nPkts++;
         timer.wait_period(waitPeriod);
     }
     clock_gettime(CLOCK_MONOTONIC, &t1);
@@ -247,6 +250,7 @@ void* run_transient_test(void* arg){
 
     //Only for test
     digital_input = conf->digital_input;
+    (*digital_input)[0] = 0;
 
     std::vector<std::vector<int32_t>> buffer = getTransientData(conf);
     if (buffer.empty()){
@@ -263,7 +267,11 @@ void* run_transient_test(void* arg){
         plan.execute(); 
     }catch(...){}
 
-    std::cout << "Trip Time: " << plan.time_ended - plan.time_started << std::endl;
+    // std::cout << "" << plan.time_ended - plan.time_started << std::endl;
+
+    if(conf->trip_time){
+        *conf->trip_time = plan.time_ended - plan.time_started;
+    }
 
     conf->running = 0;
     return nullptr;
