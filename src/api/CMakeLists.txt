@@ -1,10 +1,9 @@
 
 
-project(tests)
+project(api)
 
 add_library(${PROJECT_NAME} 
-    src/transient.cpp
-    src/tests.cpp
+    src/tcp_server.cpp
 )
 
 target_include_directories( ${PROJECT_NAME}
@@ -13,9 +12,6 @@ target_include_directories( ${PROJECT_NAME}
 )
 
 target_link_libraries(${PROJECT_NAME}
-    PUBLIC
-        tools
-        sampledValue
-        protocols
-        sniffer
+    tools
+    TestSet
 )

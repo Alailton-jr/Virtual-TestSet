@@ -1,6 +1,4 @@
 
-
-
 cmake_minimum_required(VERSION 3.5)
 
 project(Virtual-TestSet VERSION 1.0)

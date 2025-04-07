@@ -6,7 +6,14 @@
 #include "sv_sender.hpp"
 #include <pthread.h>
 #include "raw_socket.hpp"
+#include <string>
 
+#include <nlohmann/json.hpp>
+#include <utility>
+#include <fstream>
+#include <time.h>
+
+using json = nlohmann::json;
 
 struct transient_config{
 
@@ -14,8 +21,14 @@ struct transient_config{
     uint8_t loop_flag;
     uint8_t interval_flag;
     double interval;
+    uint64_t start_time;
+    uint32_t timed_start;
+    int32_t fileloaded;
+    std::string error_msg;
 
-    double* trip_time;
+    struct timespec time_started;
+    struct timespec time_ended;
+    double trip_time;
 
     std::vector<std::vector<uint8_t>> channelConfig;
     std::vector<double> scale;
@@ -30,18 +43,7 @@ struct transient_config{
     pthread_t thd;
 };
 
-
 void* run_transient_test(void* arg);
-
-
-
-
-
-
-
-
-
-
 
 #endif // TRANSIENT_HPP
 

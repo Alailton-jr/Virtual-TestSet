@@ -1,6 +1,6 @@
 
 
-project(TestSet)
+project(Main)
 
 add_executable(${PROJECT_NAME} src/main.cpp)
 

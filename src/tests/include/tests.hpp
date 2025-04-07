@@ -3,8 +3,11 @@
 
 #include "sv_sender.hpp"
 #include "Protocols.hpp"
-
 #include "transient.hpp"
+#include "sniffer.hpp"
+
+std::vector<Goose_info> get_goose_input_config(const std::string& config_path);
+std::vector<transient_config> get_transient_test_config(const std::string& config_path);
 
 struct Sv_packet{
     std::vector<uint8_t> base_pkt;
@@ -15,69 +18,40 @@ struct Sv_packet{
     uint16_t smpRate;
 };
 
-inline  Sv_packet get_sampledValue_pkt_info(SampledValue_Config& svConf){
-
-    Sv_packet packetInfo;
-
-    // 
-    packetInfo.noAsdu = svConf.noAsdu;
-    packetInfo.smpRate = svConf.smpRate;
-    packetInfo.noChannels = svConf.noChannels;
-
-    // Ethernet
-    Protocols::Ethernet eth(svConf.srcMac, svConf.dstMac);
-    auto encoded_eth = eth.getEncoded();
-    packetInfo.base_pkt.insert(packetInfo.base_pkt.end(), encoded_eth.begin(), encoded_eth.end());
-
-    // Virtual LAN
-    Protocols::Virtual_LAN vlan(svConf.vlanId, svConf.vlanPcp, svConf.vlanDei);
-    auto encoded_vlan = vlan.getEncoded();
-    packetInfo.base_pkt.insert(packetInfo.base_pkt.end(), encoded_vlan.begin(), encoded_vlan.end());
-
-    // SampledValue
-    Protocols::SampledValue sv(
-        svConf.appID,
-        svConf.noAsdu,
-        svConf.svID,
-        svConf.smpCnt,
-        svConf.confRev,
-        svConf.smpSynch,
-        svConf.smpMod
-    );
-
-    // Initial position of SampledValue block
-    int idx_SV_Start = packetInfo.base_pkt.size();
-
-    auto encoded_sv = sv.getEncoded(8);
-    packetInfo.base_pkt.insert(packetInfo.base_pkt.end(), encoded_sv.begin(), encoded_sv.end());
-
-    for (int num=0; num<svConf.noAsdu; num++){
-        int data_pos = sv.getParamPos(num, "seqData") + idx_SV_Start;
-        int smpCont_pos = sv.getParamPos(num, "smpCnt") + idx_SV_Start;
-
-        packetInfo.data_pos.push_back(data_pos);
-        packetInfo.smpCnt_pos.push_back(smpCont_pos);
-    }
-
-    return packetInfo;
-}
-
 class Tests_Class{
 public:
-    std::vector<uint8_t>* digital_input;
+    std::vector<uint8_t> digital_input;
     std::vector<transient_config> transient_tests;
+    RawSocket raw_socket;
+    SnifferClass sniffer;
+
 private:
     
     uint8_t priority = 80;
 
 public:
 
-    RawSocket raw_socket;
     Tests_Class(){
-        
+        digital_input.resize(16);
+        sniffer.digitalInput = &digital_input;
+    }
+
+    int32_t is_running(){
+        for (auto& conf: transient_tests){
+            if (conf.running == 1){
+                return 1;
+            }
+        }
+        return 0;
     }
 
     void start_transient_test(std::vector<transient_config> configs){
+
+        if(sniffer.running){
+            sniffer.stopThread();
+        }
+        std::vector<Goose_info> goInput = get_goose_input_config("files/goose_input_config.json");
+        sniffer.startThread(goInput);
 
         struct sched_param param;
         param.sched_priority = this->priority;
@@ -89,7 +63,7 @@ public:
 
         for (auto& conf: transient_tests){
             conf.socket = &this->raw_socket;
-            conf.digital_input = this->digital_input;
+            conf.digital_input = &this->digital_input;
             pthread_create(&conf.thd, NULL, run_transient_test, static_cast<void*>(&conf));
             pthread_setschedparam(conf.thd, SCHED_FIFO, &param);
         }
@@ -102,5 +76,7 @@ public:
     }
 
 };
+
+Sv_packet get_sampledValue_pkt_info(SampledValue_Config& svConf);
 
 #endif

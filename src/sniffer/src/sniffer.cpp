@@ -92,6 +92,10 @@ void process_GOOSE_packet(uint8_t* frame, ssize_t frameSize, int i){
         j += frame[i+j+1] + 2;
     }
     for (auto dat : sniffer->goInfo[goIdx].input){
+        if (dat[0] >= boolDat.size()){
+            std::cerr << "GOOSE Error: Data out of range" << std::endl;
+            return;
+        }
         (*sniffer->digitalInput)[dat[0]] = boolDat[dat[1]];
     }
     // std::cout << "GOOSE Received: "<< (boolDat[0] != 0) << std::endl;

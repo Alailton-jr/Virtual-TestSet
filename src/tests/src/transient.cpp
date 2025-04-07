@@ -12,7 +12,6 @@
 
 std::vector<uint8_t>* digital_input;
 
-
 struct transient_plan{
     void (*_execute)(transient_plan* plan);
     void execute(){
@@ -26,14 +25,15 @@ struct transient_plan{
     uint8_t loop_flag;
     uint8_t interval_flag;
 
+    struct timespec start_time;
+    int32_t timedStart;
+
     double interval;
     int* stop;
 
-    double time_started;
-    double time_ended;
+    struct timespec real_time_started, real_time_ended;
+    double time_started, time_ended;
 };
-
-
 
 std::vector<std::vector<double>> getDataFromCsv(const std::string path){
 
@@ -136,28 +136,32 @@ void simple_replay(transient_plan* plan){
 
     long waitPeriod = (long)(1e9/plan->sv_info->smpRate);
 
-    clock_gettime(CLOCK_REALTIME, &t_end);
-    clock_gettime(CLOCK_MONOTONIC, &t_ini);
+    clock_gettime(CLOCK_REALTIME, &t_ini);
 
-    if (t_end.tv_nsec > 5e8){
-        t_ini.tv_sec += 2;
+    if (!plan->timedStart){
+        if (t_ini.tv_nsec > 5e8){
+            t_ini.tv_sec += 2;
+        }else{
+            t_ini.tv_sec += 1;
+        }
+        t_ini.tv_nsec = 0;
     }else{
-        t_ini.tv_sec += 1;
+        if (t_ini.tv_sec < plan->start_time.tv_sec){
+            t_ini.tv_sec = plan->start_time.tv_sec;
+            t_ini.tv_nsec = plan->start_time.tv_nsec;
+        }
     }
-    t_ini.tv_nsec = (t_ini.tv_nsec - t_end.tv_nsec);
-    if (t_ini.tv_nsec < 0) t_ini.tv_nsec = 1e9 - t_ini.tv_nsec;
 
     int buffer_idx = 0;
     int smpCount = 0;
     ssize_t sizeSented = 0;
     long nPkts = 0;
     
-
     updatePkt(plan->buffer, plan->sv_info, buffer_idx, smpCount);
     timer.start_period(t_ini);
     timer.wait_period(waitPeriod);
-    clock_gettime(CLOCK_MONOTONIC, &t0);
-    while ((!*plan->stop) && (!(*digital_input)[0]) || nPkts < 4800){
+    clock_gettime(CLOCK_REALTIME, &t0);
+    while ((!*plan->stop) && (!(*digital_input)[0])){
         sizeSented = sendmsg(plan->socket->socket_id, &plan->socket->msg_hdr, 0);
         if (updatePkt(plan->buffer, plan->sv_info, buffer_idx, smpCount)){
             break;
@@ -165,11 +169,12 @@ void simple_replay(transient_plan* plan){
         nPkts++;
         timer.wait_period(waitPeriod);
     }
-    clock_gettime(CLOCK_MONOTONIC, &t1);
-    clock_gettime(CLOCK_MONOTONIC, &t_end);
+    clock_gettime(CLOCK_REALTIME, &t1);
+    clock_gettime(CLOCK_REALTIME, &t_end);
+    plan->real_time_started = t_ini;
+    plan->real_time_ended = t_end;
     plan->time_started = t0.tv_sec + t0.tv_nsec * 1e-9;
     plan->time_ended = t1.tv_sec + t1.tv_nsec * 1e-9;
-
     return;
 }
 
@@ -229,6 +234,10 @@ transient_plan create_plan(transient_config* conf, std::vector<std::vector<int32
     plan.sv_info = sv_info;
     plan.socket = socket;
 
+    plan.timedStart = conf->timed_start;
+    plan.start_time.tv_sec = conf->start_time / 1e9;
+    plan.start_time.tv_nsec = conf->start_time - plan.start_time.tv_sec * 1e9;
+
     if (plan.loop_flag){
         plan._execute = &loop_replay;
     } else if (plan.interval_flag){
@@ -244,7 +253,6 @@ transient_plan create_plan(transient_config* conf, std::vector<std::vector<int32
 void* run_transient_test(void* arg){
 
     auto conf = reinterpret_cast<transient_config*> (arg);
-
     conf->running = 1;
     conf->stop = 0;
 
@@ -269,9 +277,9 @@ void* run_transient_test(void* arg){
 
     // std::cout << "" << plan.time_ended - plan.time_started << std::endl;
 
-    if(conf->trip_time){
-        *conf->trip_time = plan.time_ended - plan.time_started;
-    }
+    conf->trip_time = plan.time_ended - plan.time_started;
+    conf->time_started = plan.real_time_started;
+    conf->time_ended = plan.real_time_started;
 
     conf->running = 0;
     return nullptr;

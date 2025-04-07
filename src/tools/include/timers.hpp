@@ -18,7 +18,7 @@ public:
     }
 
     void start_period(long period_ns) {
-        clock_gettime(CLOCK_MONOTONIC, &next_period);
+        clock_gettime(CLOCK_REALTIME, &next_period);
         increment_period(period_ns);
     }
 
@@ -28,7 +28,7 @@ public:
     }
 
     void wait_period(long period_ns) {
-        if(clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_period, NULL) == -1){
+        if(clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next_period, NULL) == -1){
             std::cerr << "Error in clock_nanosleep" << std::endl;
         };
         increment_period(period_ns);

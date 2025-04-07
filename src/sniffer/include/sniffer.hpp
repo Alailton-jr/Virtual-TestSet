@@ -57,7 +57,9 @@ public:
 
     void stopThread(){
         this->stop = 1;
-        pthread_join(this->thd, NULL);
+        if (this->running == 1){
+            pthread_join(this->thd, NULL);
+        }
     }
 
 };

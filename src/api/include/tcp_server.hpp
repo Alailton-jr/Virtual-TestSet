@@ -1,30 +1,20 @@
-#ifndef MAIN_HPP
-#define MAIN_HPP
+#ifndef TCP_SERVER_HPP
+#define TCP_SERVER_HPP
 
 #include <iostream>
-#include <vector>
-
-#include "sniffer.hpp"
-#include "tests.hpp"
-#include "raw_socket.hpp"
-
 #include <thread>
+#include <vector>
 #include <atomic>
-#include <cstring>      
-#include <unistd.h>     
-#include <arpa/inet.h>  
-#include <sys/socket.h> 
-#include <netinet/in.h> 
-
-#include <nlohmann/json.hpp>
-#include <utility>
-
+#include <cstring>      // For memset
+#include <unistd.h>     // For close
+#include <arpa/inet.h>  // For inet_addr
+#include <sys/socket.h> // For socket functions
+#include <netinet/in.h> // For sockaddr_in
 
 class TCPServer {
     public:
         TCPServer(int port);
         ~TCPServer();
-        Tests_Class testSet;
         void start();
         void stop();
     
@@ -38,4 +28,5 @@ class TCPServer {
         std::vector<std::thread> clientThreads;
 };
 
-#endif // MAIN_HPP
+
+#endif // TCP_SERVER_HPP

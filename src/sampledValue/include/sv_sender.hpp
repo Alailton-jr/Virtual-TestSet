@@ -30,16 +30,11 @@ public:
     uint32_t confRev;
     uint8_t smpSynch;
     uint16_t smpMod;
-
-    
-
 public:
     SampledValue_Config(){
         this->dstMac = GetMACAddress(IF_NAME);
     }
 };
-
-
 
 
 
