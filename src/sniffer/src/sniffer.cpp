@@ -205,8 +205,7 @@ void* SnifferThread(void* arg){
 
     auto sniffer_conf = static_cast<SnifferClass*>(arg);
 
-    sniffer_conf->running = 1;
-    sniffer_conf->stop = 0;
+    sniffer_conf->running.store(true, std::memory_order_release);
 
     // Create local MACs list instead of global
     std::vector<std::vector<uint8_t>> registeredMACs;
@@ -214,17 +213,12 @@ void* SnifferThread(void* arg){
         registeredMACs.push_back(mac.mac_dst);
     }
 
-    // for (int i=0;i<6;i++){
-    //     std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(registeredMACs[0][i]) << " ";
-    // }
-    // std::cout << std::endl;
-
     RawSocket* raw_socket = &sniffer_conf->socket;
     
-    // Add SO_RCVTIMEO for responsive stop (1 second timeout)
+    // Add SO_RCVTIMEO for responsive stop (100ms timeout per spec)
     struct timeval timeout;
-    timeout.tv_sec  = 1;
-    timeout.tv_usec = 0;
+    timeout.tv_sec  = 0;
+    timeout.tv_usec = 100000; // 100ms
     if (setsockopt(raw_socket->socket_id, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1) {
         std::cerr << "Warning: Failed to set SO_RCVTIMEO: " << strerror(errno) << std::endl;
     }
@@ -237,7 +231,7 @@ void* SnifferThread(void* arg){
 
     int32_t idx_task = 0;
     task_arg task;
-    while (!sniffer_conf->stop) {
+    while (!sniffer_conf->stop.load(std::memory_order_acquire)) {
 
         raw_socket->msg_hdr.msg_iov->iov_base = args_buff[idx_task];
         rx_bytes = recvmsg(raw_socket->socket_id, &raw_socket->msg_hdr, 0);
@@ -286,6 +280,6 @@ void* SnifferThread(void* arg){
     }
 
 
-    sniffer_conf->running = 0;
+    sniffer_conf->running.store(false, std::memory_order_release);
     return nullptr;
 }

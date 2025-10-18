@@ -24,43 +24,58 @@ void* SnifferThread(void* arg);
 
 class SnifferClass {
 public:
-    int running, stop;
+    std::atomic<bool> running;
+    std::atomic<bool> stop;
     int noThreads;
     int noTasks;
     int priority;
 
     pthread_t thd;
+    bool threadStarted;
 
     RawSocket socket;
     std::vector<std::atomic<uint8_t>>* digitalInput;
     std::vector<Goose_info> goInfo;
 
-    SnifferClass(){
+    SnifferClass() : running(false), stop(false), threadStarted(false) {
     }
+    
     ~SnifferClass(){
+        stopThread();
     }
 
     void init(){
     }
 
     void startThread(std::vector<Goose_info> goInfo){
+        if (threadStarted) {
+            throw std::runtime_error("Sniffer thread already started");
+        }
 
         this->goInfo = goInfo;
         this->noThreads = Sniffer_NoThreads;
         this->noTasks = Sniffer_NoTasks;
         this->priority = Sniffer_ThreadPriority;
 
-        pthread_create(&this->thd, NULL, SnifferThread, static_cast<void*>(this));
+        int ret = pthread_create(&this->thd, NULL, SnifferThread, static_cast<void*>(this));
+        if (ret != 0) {
+            throw std::runtime_error("Failed to create sniffer thread: " + std::string(strerror(ret)));
+        }
+        threadStarted = true;
+        
         struct sched_param param;
         param.sched_priority = this->priority;
         pthread_setschedparam(this->thd, SCHED_FIFO, &param);
     }
 
     void stopThread(){
-        this->stop = 1;
-        if (this->running == 1){
-            pthread_join(this->thd, NULL);
+        if (!threadStarted) {
+            return;
         }
+        
+        stop.store(true, std::memory_order_release);
+        pthread_join(this->thd, NULL);
+        threadStarted = false;
     }
 
 };

@@ -50,18 +50,14 @@ public:
      * @param no_task Maximum number of tasks in the queue.
      * @param priority Priority of threads (SCHED_FIFO).
     */
-    ThreadPool(int32_t no_threads, int32_t no_task, int32_t priority) {
-        stop = false;
-        running = true;
-
-        // Task Queue Initialization
+    ThreadPool(int32_t no_threads, int32_t no_task, int32_t priority) 
+        : stop(false), running(true), num_tasks(no_task), front(0), rear(-1), count(0) {
+        
+        // Task Queue Initialization (BEFORE creating threads)
         taskQueue.resize(no_task);
         pthread_mutex_init(&mutex, nullptr);
         pthread_cond_init(&not_empty, nullptr);
         pthread_cond_init(&not_full, nullptr);
-        num_tasks = no_task;
-        front = count = 0;
-        rear = -1;
 
         // Threads Initialization
         threads.resize(no_threads);
@@ -69,17 +65,34 @@ public:
             .sched_priority = priority
         };
         for (int32_t i = 0; i < no_threads; ++i) {
-            pthread_create(&threads[i], nullptr, &ThreadPool<FuncType>::worker, this);
+            int ret = pthread_create(&threads[i], nullptr, &ThreadPool<FuncType>::worker, this);
+            if (ret != 0) {
+                // Clean up already-created threads
+                stop = true;
+                pthread_cond_broadcast(&not_empty);
+                for (int32_t j = 0; j < i; ++j) {
+                    pthread_join(threads[j], nullptr);
+                }
+                pthread_mutex_destroy(&mutex);
+                pthread_cond_destroy(&not_empty);
+                pthread_cond_destroy(&not_full);
+                throw std::runtime_error("Failed to create thread: " + std::string(strerror(ret)));
+            }
             pthread_setschedparam(threads[i], SCHED_FIFO, &schedParam);
         }
     }
 
     // Destructor stops threads and cleans up resources
     ~ThreadPool() {
+        // First, prevent new submissions
+        pthread_mutex_lock(&mutex);
         stop = true;
+        pthread_mutex_unlock(&mutex);
 
-        // Signal threads to wake up and terminate
+        // Wake up all threads to process remaining tasks and exit
         pthread_cond_broadcast(&not_empty);
+        
+        // Join all worker threads (they will drain the queue)
         for (pthread_t& thread : threads) {
             pthread_join(thread, nullptr);
         }

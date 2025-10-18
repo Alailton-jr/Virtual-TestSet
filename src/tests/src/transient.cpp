@@ -27,7 +27,7 @@ struct transient_plan{
     int32_t timedStart;
 
     double interval;
-    int* stop;
+    std::atomic<bool>* stop;
     std::vector<std::atomic<uint8_t>>* digital_input;
 
     struct timespec real_time_started, real_time_ended;
@@ -163,7 +163,7 @@ void simple_replay(transient_plan* plan){
     timer.start_period(t_ini);
     timer.wait_period(waitPeriod);
     clock_gettime(CLOCK_MONOTONIC, &t0);
-    while ((!*plan->stop) && ((*plan->digital_input)[0].load(std::memory_order_acquire) == 0)){
+    while ((!plan->stop->load(std::memory_order_acquire)) && ((*plan->digital_input)[0].load(std::memory_order_acquire) == 0)){
         sizeSented = sendmsg(plan->socket->socket_id, &plan->socket->msg_hdr, 0);
         if (updatePkt(plan->buffer, plan->sv_info, buffer_idx, smpCount)){
             break;
@@ -208,7 +208,7 @@ void loop_replay(transient_plan* plan){
     timer.start_period(t_ini);
     timer.wait_period(waitPeriod);
     clock_gettime(CLOCK_MONOTONIC, &t0);
-    while ((!*plan->stop) && ((*plan->digital_input)[0].load(std::memory_order_acquire) == 0)){
+    while ((!plan->stop->load(std::memory_order_acquire)) && ((*plan->digital_input)[0].load(std::memory_order_acquire) == 0)){
         sizeSented = sendmsg(plan->socket->socket_id, &plan->socket->msg_hdr, 0);
         updatePkt(plan->buffer, plan->sv_info, buffer_idx, smpCount);
         timer.wait_period(waitPeriod);
@@ -256,15 +256,14 @@ transient_plan create_plan(transient_config* conf, std::vector<std::vector<int32
 void* run_transient_test(void* arg){
 
     auto conf = reinterpret_cast<transient_config*> (arg);
-    conf->running = 1;
-    conf->stop = 0;
+    conf->running.store(true, std::memory_order_release);
 
     //Only for test - initialize digital input
     (*conf->digital_input)[0].store(0, std::memory_order_relaxed);
 
     std::vector<std::vector<int32_t>> buffer = getTransientData(conf);
     if (buffer.empty()){
-        conf->running = 0;
+        conf->running.store(false, std::memory_order_release);
         return nullptr;
     }
     Sv_packet sv_info = get_sampledValue_pkt_info(conf->sv_config);
@@ -283,7 +282,7 @@ void* run_transient_test(void* arg){
     conf->time_started = plan.real_time_started;
     conf->time_ended = plan.real_time_started;
 
-    conf->running = 0;
+    conf->running.store(false, std::memory_order_release);
     return nullptr;
 }
 

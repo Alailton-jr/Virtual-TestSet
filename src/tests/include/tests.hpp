@@ -45,7 +45,7 @@ public:
 
     int32_t is_running(){
         for (auto& conf: transient_tests){
-            if (conf.running == 1){
+            if (conf.running.load(std::memory_order_acquire)){
                 return 1;
             }
         }
@@ -54,7 +54,7 @@ public:
 
     void start_transient_test(std::vector<transient_config> configs){
 
-        if(sniffer.running){
+        if(sniffer.running.load(std::memory_order_acquire)){
             sniffer.stopThread();
         }
         std::vector<Goose_info> goInput = get_goose_input_config("files/goose_input_config.json");
@@ -64,21 +64,34 @@ public:
         param.sched_priority = this->priority;
         transient_tests.clear();
 
-        for (int i=0; i<configs.size(); i++){
+        for (size_t i=0; i<configs.size(); i++){
             transient_tests.push_back(configs[i]);
         }
 
         for (auto& conf: transient_tests){
             conf.socket = &this->raw_socket;
             conf.digital_input = &this->digital_input;
-            pthread_create(&conf.thd, NULL, run_transient_test, static_cast<void*>(&conf));
+            int ret = pthread_create(&conf.thd, NULL, run_transient_test, static_cast<void*>(&conf));
+            if (ret != 0) {
+                throw std::runtime_error("Failed to create transient test thread: " + std::string(strerror(ret)));
+            }
+            conf.threadStarted = true;
             pthread_setschedparam(conf.thd, SCHED_FIFO, &param);
         }
     }
 
     void stop_transient_test(){
         for (auto& conf: transient_tests){
-            conf.stop = 1;
+            conf.stop.store(true, std::memory_order_release);
+        }
+    }
+    
+    void join_transient_tests(){
+        for (auto& conf: transient_tests){
+            if (conf.threadStarted) {
+                pthread_join(conf.thd, NULL);
+                conf.threadStarted = false;
+            }
         }
     }
 

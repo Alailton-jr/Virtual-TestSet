@@ -40,8 +40,13 @@ struct transient_config{
     std::vector<std::atomic<uint8_t>>* digital_input;
     
 
-    int stop, running, error;
+    std::atomic<bool> stop;
+    std::atomic<bool> running;
+    std::atomic<bool> error;
     pthread_t thd;
+    bool threadStarted;
+    
+    transient_config() : stop(false), running(false), error(false), threadStarted(false) {}
 };
 
 void* run_transient_test(void* arg);
