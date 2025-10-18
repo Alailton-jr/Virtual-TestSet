@@ -112,11 +112,17 @@ private:
         indices.clear(); 
 
         this->numDatSetEntries = allData.size();
+        
+        // Guard against dataset overflow (32-bit signed integer max)
+        if (this->numDatSetEntries > INT32_MAX) {
+            throw std::runtime_error("numDatSetEntries exceeds maximum allowed value");
+        }
 
         // gocbRef
         indices["gocbRef"] = _encoded.size();
         _encoded.push_back(0x80); // Tag [0] VisibleString
-        _encoded.push_back(gocbRef.size());
+        auto gocbRefLen = encodeBERLength(gocbRef.size());
+        _encoded.insert(_encoded.end(), gocbRefLen.begin(), gocbRefLen.end());
         _encoded.insert(_encoded.end(), gocbRef.begin(), gocbRef.end());
 
         // timeAllowedtoLive
@@ -130,14 +136,16 @@ private:
         // datSet
         indices["datSet"] = _encoded.size();
         _encoded.push_back(0x82); // Tag [2] VisibleString
-        _encoded.push_back(datSet.size());
+        auto datSetLen = encodeBERLength(datSet.size());
+        _encoded.insert(_encoded.end(), datSetLen.begin(), datSetLen.end());
         _encoded.insert(_encoded.end(), datSet.begin(), datSet.end());
 
         // goID
         if (goID) {
             indices["goID"] = _encoded.size();
             _encoded.push_back(0x83); // Tag [3] VisibleString OPTIONAL
-            _encoded.push_back(goID->size());
+            auto goIDLen = encodeBERLength(goID->size());
+            _encoded.insert(_encoded.end(), goIDLen.begin(), goIDLen.end());
             _encoded.insert(_encoded.end(), goID->begin(), goID->end());
         }
 
@@ -145,7 +153,8 @@ private:
         indices["t"] = _encoded.size();
         _encoded.push_back(0x84); // Tag [4] UtcTime
         auto tEncoded = t.getEncoded();
-        _encoded.push_back(tEncoded.size());
+        auto tLen = encodeBERLength(tEncoded.size());
+        _encoded.insert(_encoded.end(), tLen.begin(), tLen.end());
         _encoded.insert(_encoded.end(), tEncoded.begin(), tEncoded.end());
 
         // stNum
