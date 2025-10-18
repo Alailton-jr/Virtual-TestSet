@@ -17,3 +17,13 @@ Started: 2025-10-18
 
 [2025-10-18 00:06:00] STEP 1.5 DONE — Added sanitizeFileName() with filesystem::canonical path validation; protects against path traversal (../, absolute paths); fixed sizeof(buffer) bug → maxBufferSize; replaced atoi() with std::stoi() + 100MB bounds check; applied to save_file() and save_file2() (files: main.cpp, commit: bb2b234, tests: path traversal attempts pending)
 
+[2025-10-18 00:07:00] STEP 1.6 DONE — Replaced exit(1) with std::runtime_error exceptions in RawSocket::create_socket; added if_nametoindex return value check; improved error messages with strerror(errno) (files: raw_socket.hpp, commit: bd06221, tests: missing interface simulation pending)
+
+[2025-10-18 00:08:00] STEP 1.7 DONE — Added encodeBERLength() helper for ITU-T X.690 compliance; handles short form (≤127), long form 0x81 (≤255), and long form 0x82 (≤65535); applied to allData encoding in Protocols.hpp and Goose.hpp (files: Protocols.hpp, Goose.hpp, commit: 411924d, tests: >255 allData scenario pending)
+
+[2025-10-18 00:09:00] STEP 1.8 DONE — Added Virtual_LAN constructor validation: priority must be 0-7 (3 bits), VLAN ID must be 0-4095 (12 bits); throws std::invalid_argument on violation (files: Virtual_LAN.hpp, commit: 888ece3, tests: invalid VLAN rejection pending)
+
+[2025-10-18 00:10:00] STEP 1.9 DONE — Removed global registeredMACs and sniffer pointers; moved to local variables in SnifferThread with context passing via task_arg; added SO_RCVTIMEO (1 sec timeout) to enable responsive thread stop via EAGAIN/EWOULDBLOCK (files: sniffer.cpp, commit: a787c0f, tests: stop latency verification pending)
+
+[2025-10-18 00:11:00] STEP 1-hotfixes DONE — All Phase 1 P0 hotfixes complete (9 issues resolved across concurrency, security, protocol, timing); ready for build/test (commits: a4c7ebd, 359d618, 05c2f9d, 1f652ee, bb2b234, bd06221, 411924d, 888ece3, a787c0f)
+
