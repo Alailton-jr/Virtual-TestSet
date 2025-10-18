@@ -35,3 +35,9 @@ Started: 2025-10-18
 
 [2025-10-18 00:15:00] STEP 2-protocol DONE — Phase 2 complete: canonicalized protocol layer (single source of truth), recursive BER encoding, performance optimizations (pre-allocation, fixed arrays); zero heap churn in hot loop confirmed by design (commits: 1a75761, 27959a5, 04c39a4)
 
+[2025-10-18 00:16:00] STEP 3.1 DONE — Fixed stop/join semantics: SnifferClass now uses std::atomic<bool> for stop/running flags with acquire/release; added SO_RCVTIMEO (100ms) for responsive stop per spec; transient_config uses atomic bool instead of int; Tests_Class has proper join_transient_tests() method; all pthread_create return codes checked with exception on failure; no detach() anywhere (files: sniffer.hpp, sniffer.cpp, transient.hpp, transient.cpp, tests.hpp, commit: d294895, tests: stop latency <200ms verification pending)
+
+[2025-10-18 00:17:00] STEP 3.2 DONE — ThreadPool safe initialization: all members initialized in initializer list BEFORE worker threads start; pthread_create return codes checked with cleanup and throw on failure; destructor locks mutex, sets stop=true, broadcasts, then joins all threads (drain queue); workers process remaining tasks before exit; exception-safe cleanup in constructor (files: thread_pool.hpp, commit: d294895, tests: 100 queued tasks drain verification pending, TSAN clean pending)
+
+[2025-10-18 00:18:00] STEP 3-threading DONE — Phase 3 complete: proper thread discipline (no detach, all threads joinable), condition variable predicates in while loops, checked pthread operations, drain-on-shutdown for ThreadPool; responsive stop semantics with SO_RCVTIMEO (commit: d294895)
+
