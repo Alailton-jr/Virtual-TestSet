@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <inttypes.h>
+#include <stdexcept>
 
 
 class Virtual_LAN {
@@ -11,7 +12,16 @@ public:
     bool DEI;
     uint16_t ID;
 
-    Virtual_LAN(uint8_t pri, bool dei, uint16_t id) : priority(pri), DEI(dei), ID(id) {}
+    Virtual_LAN(uint8_t pri, bool dei, uint16_t id) : priority(pri), DEI(dei), ID(id) {
+        // Validate priority (3 bits: 0-7)
+        if (priority > 7) {
+            throw std::invalid_argument("VLAN priority must be 0-7, got " + std::to_string(priority));
+        }
+        // Validate VLAN ID (12 bits: 0-4095)
+        if (ID > 4095) {
+            throw std::invalid_argument("VLAN ID must be 0-4095, got " + std::to_string(ID));
+        }
+    }
 
     std::vector<uint8_t> getEncoded() const {
         std::vector<uint8_t> encoded;
