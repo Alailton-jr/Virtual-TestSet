@@ -27,3 +27,11 @@ Started: 2025-10-18
 
 [2025-10-18 00:11:00] STEP 1-hotfixes DONE — All Phase 1 P0 hotfixes complete (9 issues resolved across concurrency, security, protocol, timing); ready for build/test (commits: a4c7ebd, 359d618, 05c2f9d, 1f652ee, bb2b234, bd06221, 411924d, 888ece3, a787c0f)
 
+[2025-10-18 00:12:00] STEP 2.1 DONE — Removed duplicate protocol classes from Protocols.hpp wrapper; created BER_Encoding.hpp shared utility; updated main.cpp and tests.cpp to use standalone headers directly (Ethernet.hpp, Goose.hpp, SampledValue.hpp, Virtual_LAN.hpp); Protocols.hpp now minimal compatibility wrapper (files: Protocols.hpp, BER_Encoding.hpp, main.cpp, tests.hpp, tests.cpp, commit: 1a75761, tests: golden packet comparison pending)
+
+[2025-10-18 00:13:00] STEP 2.2 DONE — Applied encodeBERLength to all string fields in GOOSE encoding (gocbRef, datSet, goID, t); added overflow guard for numDatSetEntries (INT32_MAX check); ensures recursive BER length computation throughout (files: Goose.hpp, commit: 27959a5, tests: long string encoding verification pending)
+
+[2025-10-18 00:14:00] STEP 2.3 DONE — Fixed MAC parsing: exact 17-char format validation ("XX:XX:XX:XX:XX:XX"), std::array<uint8_t, 6> return to avoid heap allocation, colon separator checks, error handling for invalid hex; made Virtual_LAN fields private with validated getters/setters; pre-allocated encoded buffers (files: Ethernet.hpp, Virtual_LAN.hpp, commit: 04c39a4, tests: invalid MAC rejection, heap profiling pending)
+
+[2025-10-18 00:15:00] STEP 2-protocol DONE — Phase 2 complete: canonicalized protocol layer (single source of truth), recursive BER encoding, performance optimizations (pre-allocation, fixed arrays); zero heap churn in hot loop confirmed by design (commits: 1a75761, 27959a5, 04c39a4)
+
