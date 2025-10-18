@@ -26,17 +26,20 @@
 #include <fstream>
 #include <sstream>
 
-std::vector<std::vector<uint8_t>> registeredMACs;
-SnifferClass* sniffer;
+// Globals removed - moved into SnifferThread as local variables
+// std::vector<std::vector<uint8_t>> registeredMACs;
+// SnifferClass* sniffer;
 
 int debug_count=0;
 
 struct task_arg{
     uint8_t* pkt;
     ssize_t pkt_len;
+    SnifferClass* sniffer; // Add context
+    std::vector<std::vector<uint8_t>>* registeredMACs; // Add context
 };
 
-void process_GOOSE_packet(uint8_t* frame, ssize_t frameSize, int i){
+void process_GOOSE_packet(uint8_t* frame, ssize_t frameSize, int i, SnifferClass* sniffer){
 
     // Validate minimum GOOSE header size
     if (i + 14 > frameSize) {
@@ -164,17 +167,19 @@ void process_pkt(task_arg* arg) {
 
     uint8_t* frame = arg->pkt;
     ssize_t frameSize = arg->pkt_len;
+    std::vector<std::vector<uint8_t>>* registeredMACs = arg->registeredMACs;
+    SnifferClass* sniffer = arg->sniffer;
 
     // -------- Process the frame -------- //
 
     // Check if the mac exist in the registeredMACs
     int mac_found = 0;
-    for (int i=0; i<registeredMACs.size(); i++){
-        if (memcmp(frame, registeredMACs[i].data(), 6) == 0){ // For SV
+    for (size_t i=0; i<registeredMACs->size(); i++){
+        if (memcmp(frame, (*registeredMACs)[i].data(), 6) == 0){ // For SV
             mac_found = 1;
             break;
         }
-        if (memcmp(frame+6, registeredMACs[i].data(), 6) == 0){ // For GOOSE
+        if (memcmp(frame+6, (*registeredMACs)[i].data(), 6) == 0){ // For GOOSE
             mac_found = 1;
             break;
         }
@@ -189,7 +194,7 @@ void process_pkt(task_arg* arg) {
         // process_SV_packet(frame, frameSize, sv, i);
         return;
     }else if ((frame[i] == 0x88 && frame[i+1] == 0xb8)){
-        process_GOOSE_packet(frame, frameSize, i);
+        process_GOOSE_packet(frame, frameSize, i, sniffer);
     }else return;
 
 }
@@ -203,10 +208,11 @@ void* SnifferThread(void* arg){
     sniffer_conf->running = 1;
     sniffer_conf->stop = 0;
 
+    // Create local MACs list instead of global
+    std::vector<std::vector<uint8_t>> registeredMACs;
     for (auto mac : sniffer_conf->goInfo){
         registeredMACs.push_back(mac.mac_dst);
     }
-    sniffer = sniffer_conf;
 
     // for (int i=0;i<6;i++){
     //     std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(registeredMACs[0][i]) << " ";
@@ -214,6 +220,15 @@ void* SnifferThread(void* arg){
     // std::cout << std::endl;
 
     RawSocket* raw_socket = &sniffer_conf->socket;
+    
+    // Add SO_RCVTIMEO for responsive stop (1 second timeout)
+    struct timeval timeout;
+    timeout.tv_sec  = 1;
+    timeout.tv_usec = 0;
+    if (setsockopt(raw_socket->socket_id, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1) {
+        std::cerr << "Warning: Failed to set SO_RCVTIMEO: " << strerror(errno) << std::endl;
+    }
+    
     // ThreadPool<void(task_arg*)> pool(sniffer_conf->noThreads, sniffer_conf->noTasks, sniffer_conf->priority);
     // Variables used for decoding and the Thread Pool 
     uint8_t args_buff[Sniffer_NoTasks+1][Sniffer_RxSize];
@@ -227,13 +242,24 @@ void* SnifferThread(void* arg){
         raw_socket->msg_hdr.msg_iov->iov_base = args_buff[idx_task];
         rx_bytes = recvmsg(raw_socket->socket_id, &raw_socket->msg_hdr, 0);
 
-        if (rx_bytes < 0 || rx_bytes > Sniffer_RxSize) {
-            std::cerr << "Failed to receive message" << std::endl;
+        if (rx_bytes < 0) {
+            // Check for timeout - this allows responsive stop
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                continue; // Timeout, check stop condition
+            }
+            std::cerr << "Failed to receive message: " << strerror(errno) << std::endl;
+            continue;
+        }
+        
+        if (rx_bytes > Sniffer_RxSize) {
+            std::cerr << "Received message too large" << std::endl;
             continue;
         }
   
         task.pkt = args_buff[idx_task];
         task.pkt_len = rx_bytes;
+        task.sniffer = sniffer_conf;
+        task.registeredMACs = &registeredMACs;
         process_pkt(&task);
 
 
