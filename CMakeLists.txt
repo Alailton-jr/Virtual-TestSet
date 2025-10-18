@@ -34,6 +34,7 @@ endif()
 # find_package(nlohmann_json 3.2.0 REQUIRED)
 
 # Subdirectories
+add_subdirectory(src/platform)
 add_subdirectory(src/main)
 add_subdirectory(src/protocols)
 add_subdirectory(src/tools)

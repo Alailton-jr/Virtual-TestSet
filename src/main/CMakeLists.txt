@@ -4,8 +4,9 @@ project(Main)
 
 add_executable(${PROJECT_NAME} src/main.cpp)
 
-
+# Phase 11: Link with platform library for compat.hpp and platform detection
 target_link_libraries(${PROJECT_NAME}
+    platform
     protocols
     tools
     sampledValue
