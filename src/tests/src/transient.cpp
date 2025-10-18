@@ -7,6 +7,7 @@
 #include "tests.hpp"
 #include "rt_utils.hpp"
 #include "logger.hpp"
+#include "metrics.hpp"
 #include <time.h>
 
 #include <fstream>
@@ -169,6 +170,9 @@ void simple_replay(transient_plan* plan){
     clock_gettime(CLOCK_MONOTONIC, &t0);
     while ((!plan->stop->load(std::memory_order_acquire)) && ((*plan->digital_input)[0].load(std::memory_order_acquire) == 0)){
         sizeSented = sendmsg(plan->socket->socket_id, &plan->socket->msg_hdr, 0);
+        if (sizeSented > 0) {
+            METRIC_SENT_FRAME();
+        }
         if (updatePkt(plan->buffer, plan->sv_info, buffer_idx, smpCount)){
             break;
         }
@@ -214,6 +218,9 @@ void loop_replay(transient_plan* plan){
     clock_gettime(CLOCK_MONOTONIC, &t0);
     while ((!plan->stop->load(std::memory_order_acquire)) && ((*plan->digital_input)[0].load(std::memory_order_acquire) == 0)){
         sizeSented = sendmsg(plan->socket->socket_id, &plan->socket->msg_hdr, 0);
+        if (sizeSented > 0) {
+            METRIC_SENT_FRAME();
+        }
         updatePkt(plan->buffer, plan->sv_info, buffer_idx, smpCount);
         timer.wait_period(waitPeriod);
     }
