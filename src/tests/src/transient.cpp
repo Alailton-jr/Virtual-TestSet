@@ -68,7 +68,7 @@ std::vector<std::vector<double>> getDataFromCsv(const std::string path){
 std::vector<std::vector<int32_t>> getTransientData(transient_config* conf){
     
     if (conf->fileName.empty()){
-        conf->error = 1;
+        conf->error.store(true, std::memory_order_release);
     }
 
     std::vector<std::vector<double>> data = getDataFromCsv(conf->fileName);
@@ -89,10 +89,12 @@ std::vector<std::vector<int32_t>> getTransientData(transient_config* conf){
         int n_data = pos[1];
 
         std::vector<int32_t> channel_data;
-        for (int j = 0; j < data[n_data].size(); j++){
+        channel_data.reserve(data[n_data].size());  // Pre-allocate
+        
+        for (size_t j = 0; j < data[n_data].size(); j++){
             channel_data.push_back(static_cast<int32_t>(data[n_data][j] * conf->scale[n_channel]));
         }
-        res[n_channel] = channel_data;
+        res[n_channel] = std::move(channel_data);  // Move to avoid copy
     }
 
     return res;

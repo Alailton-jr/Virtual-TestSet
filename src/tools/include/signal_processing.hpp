@@ -3,16 +3,25 @@
 
 #include <vector>
 #include <cmath>
+#include <algorithm>  // for std::min, std::clamp
 
+// Resample multi-channel signal data using linear interpolation
+// NOTE: Linear interpolation is acceptable for low-frequency signals (<20% Nyquist)
+// For higher frequencies or demanding applications, consider:
+//   - Polyphase FIR filter for proper band-limiting
+//   - Sinc interpolation for minimal distortion
+//   - Anti-aliasing filter before downsampling
 inline  std::vector<std::vector<double>> resample(std::vector<std::vector<double>> data, float fs, float new_fs){
 
     std::vector<std::vector<double>> data_resampled;
+    data_resampled.reserve(data.size());  // Pre-allocate outer vector
 
     float resample_ratio = new_fs / fs;
 
     for (const auto& signal : data) {
         std::vector<double> resampled_signal;
         int new_length = static_cast<int>(std::round(signal.size() * resample_ratio));
+        resampled_signal.reserve(new_length);  // Pre-allocate inner vector
 
         for (int i = 0; i < new_length; ++i) {
             float original_index = i / resample_ratio;
@@ -26,7 +35,7 @@ inline  std::vector<std::vector<double>> resample(std::vector<std::vector<double
             resampled_signal.push_back(interpolated_value);
         }
 
-        data_resampled.push_back(resampled_signal);
+        data_resampled.push_back(std::move(resampled_signal));  // Move to avoid copy
     }
 
     return data_resampled;

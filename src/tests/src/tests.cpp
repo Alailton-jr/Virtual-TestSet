@@ -90,6 +90,9 @@ std::vector<transient_config> get_transient_test_config(const std::string& confi
     return transient_configs;
 }
 
+// Pre-build SV packet template with static fields
+// Only dynamic fields (smpCnt, seqData) need patching per frame
+// PERF: Call once per config and cache result; avoid per-frame allocation
 Sv_packet get_sampledValue_pkt_info(SampledValue_Config& svConf){
 
     Sv_packet packetInfo;
@@ -99,17 +102,18 @@ Sv_packet get_sampledValue_pkt_info(SampledValue_Config& svConf){
     packetInfo.smpRate = svConf.smpRate;
     packetInfo.noChannels = svConf.noChannels;
 
-    // Ethernet
+    // Ethernet (static: source/dest MAC)
     Ethernet eth(svConf.srcMac, svConf.dstMac);
     auto encoded_eth = eth.getEncoded();
+    packetInfo.base_pkt.reserve(encoded_eth.size() + 200);  // Pre-allocate typical size
     packetInfo.base_pkt.insert(packetInfo.base_pkt.end(), encoded_eth.begin(), encoded_eth.end());
 
-    // Virtual LAN
-    Virtual_LAN vlan(svConf.vlanId, svConf.vlanPcp, svConf.vlanDei);
+    // Virtual LAN (static: priority, DEI, ID)
+    Virtual_LAN vlan(svConf.vlanPcp, svConf.vlanDei, svConf.vlanId);
     auto encoded_vlan = vlan.getEncoded();
     packetInfo.base_pkt.insert(packetInfo.base_pkt.end(), encoded_vlan.begin(), encoded_vlan.end());
 
-    // SampledValue
+    // SampledValue (mostly static: appID, svID, confRev, smpSynch, smpMod)
     SampledValue sv(
         svConf.appID,
         svConf.noAsdu,
@@ -126,6 +130,10 @@ Sv_packet get_sampledValue_pkt_info(SampledValue_Config& svConf){
     auto encoded_sv = sv.getEncoded(8);
     packetInfo.base_pkt.insert(packetInfo.base_pkt.end(), encoded_sv.begin(), encoded_sv.end());
 
+    // Record positions of dynamic fields for fast patching
+    packetInfo.data_pos.reserve(svConf.noAsdu);
+    packetInfo.smpCnt_pos.reserve(svConf.noAsdu);
+    
     for (int num=0; num<svConf.noAsdu; num++){
         int data_pos = sv.getParamPos(num, "seqData") + idx_SV_Start;
         int smpCont_pos = sv.getParamPos(num, "smpCnt") + idx_SV_Start;
