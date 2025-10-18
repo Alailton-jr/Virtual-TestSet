@@ -2,7 +2,10 @@
 #include "main.hpp"
 #include "raw_socket.hpp"
 
-#include "Protocols.hpp"
+#include "Ethernet.hpp"
+#include "Goose.hpp"
+#include "SampledValue.hpp"
+#include "Virtual_LAN.hpp"
 #include "sv_sender.hpp"
 
 #include "tests.hpp"
@@ -458,17 +461,17 @@ void test_sampledValue_Pkt(){
     sv_conf->smpSynch = 0x01;
 
     // Ethernet
-    Protocols::Ethernet eth(sv_conf->srcMac, sv_conf->dstMac);
+    Ethernet eth(sv_conf->srcMac, sv_conf->dstMac);
     auto encoded_eth = eth.getEncoded();
     base_pkt.insert(base_pkt.end(), encoded_eth.begin(), encoded_eth.end());
 
     // Virtual LAN
-    Protocols::Virtual_LAN vlan(sv_conf->vlanId, sv_conf->vlanPcp, sv_conf->vlanDei);
+    Virtual_LAN vlan(sv_conf->vlanId, sv_conf->vlanPcp, sv_conf->vlanDei);
     auto encoded_vlan = vlan.getEncoded();
     base_pkt.insert(base_pkt.end(), encoded_vlan.begin(), encoded_vlan.end());
 
     // SampledValue
-    Protocols::SampledValue sv(
+    SampledValue sv(
         sv_conf->appID,
         sv_conf->noAsdu,
         sv_conf->svID,

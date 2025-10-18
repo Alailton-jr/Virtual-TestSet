@@ -2,7 +2,10 @@
 #define TESTS_HPP
 
 #include "sv_sender.hpp"
-#include "Protocols.hpp"
+#include "Ethernet.hpp"
+#include "Goose.hpp"
+#include "SampledValue.hpp"
+#include "Virtual_LAN.hpp"
 #include "transient.hpp"
 #include "sniffer.hpp"
 #include <atomic>
