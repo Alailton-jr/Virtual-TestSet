@@ -15,3 +15,5 @@ Started: 2025-10-18
 
 [2025-10-18 00:05:00] STEP 1.4 DONE — Added explicit uint16_t cast for smpCnt in updatePkt to prevent overflow beyond 16 bits; maintains proper wrap at smpRate (files: transient.cpp, commit: 1f652ee, tests: 70k samples run verification pending)
 
+[2025-10-18 00:06:00] STEP 1.5 DONE — Added sanitizeFileName() with filesystem::canonical path validation; protects against path traversal (../, absolute paths); fixed sizeof(buffer) bug → maxBufferSize; replaced atoi() with std::stoi() + 100MB bounds check; applied to save_file() and save_file2() (files: main.cpp, commit: bb2b234, tests: path traversal attempts pending)
+
