@@ -133,9 +133,9 @@ public:
 
 private:
     std::string interface_name;
-    RingType ring_type;
+    [[maybe_unused]] RingType ring_type;  // Reserved for future TX ring implementation
     int socket_fd;
-    int if_index;
+    [[maybe_unused]] int if_index;  // Used in Linux-only promiscuous mode
     
     // Ring buffer configuration
     size_t block_size;
@@ -144,12 +144,12 @@ private:
     size_t frame_count;
     
     // Memory-mapped ring buffer
-    void* ring_buffer;
-    size_t ring_buffer_size;
+    [[maybe_unused]] void* ring_buffer;  // Reserved for future TX ring implementation
+    [[maybe_unused]] size_t ring_buffer_size;  // Reserved for future TX ring implementation
     
     // Current block/frame indices
-    size_t current_block_idx;
-    size_t current_frame_idx;
+    [[maybe_unused]] size_t current_block_idx;  // Reserved for future TX ring implementation
+    [[maybe_unused]] size_t current_frame_idx;  // Reserved for future TX ring implementation
     
     // BPF filter configuration
     std::vector<uint16_t> filter_ethertypes;
@@ -157,7 +157,7 @@ private:
     
     // Timestamping configuration
     bool timestamping_enabled;
-    bool hw_timestamping_available;
+    [[maybe_unused]] bool hw_timestamping_available;  // Reserved for future hardware timestamping
     
     // Statistics
     Stats stats;

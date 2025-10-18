@@ -22,7 +22,7 @@
 constexpr size_t DEFAULT_BLOCK_SIZE = 4096 * 4;      // 16 KB blocks
 constexpr size_t DEFAULT_BLOCK_COUNT = 256;          // 4 MB total ring
 constexpr size_t DEFAULT_FRAME_SIZE = 2048;          // Max Ethernet frame
-constexpr uint32_t DEFAULT_BLOCK_TIMEOUT_MS = 10;    // Poll timeout
+[[maybe_unused]] constexpr uint32_t DEFAULT_BLOCK_TIMEOUT_MS = 10;    // Poll timeout (reserved for future use)
 
 PacketRing::PacketRing(const std::string& interface_name, RingType ring_type)
     : interface_name(interface_name)
@@ -131,6 +131,7 @@ bool PacketRing::enable_fanout(uint16_t fanout_id) {
     std::cout << "[PacketRing] PACKET_FANOUT enabled (ID=" << fanout_id << ")" << std::endl;
     return true;
 #else
+    (void)fanout_id;  // Unused on non-Linux platforms
     return false;
 #endif
 }
@@ -191,6 +192,8 @@ bool PacketRing::send_packet(const uint8_t* data, size_t size) {
     
     return false;
 #else
+    (void)data;  // Unused on non-Linux platforms
+    (void)size;  // Unused on non-Linux platforms
     return false;
 #endif
 }
@@ -315,6 +318,7 @@ bool PacketRing::set_promiscuous_mode(bool enable) {
     }
     return true;
 #else
+    (void)enable;  // Unused on non-Linux platforms
     return false;
 #endif
 }
