@@ -43,6 +43,10 @@ public:
     }
 
     int getParamPos(int noAsdu, const std::string& param) const {
+        // Bounds check: validate noAsdu is within valid range
+        if (noAsdu < 0 || static_cast<size_t>(noAsdu) >= indices.size()) {
+            return -1;  // Return error value for out-of-bounds access
+        }
         auto it = indices[noAsdu].find(param);
         return (it != indices[noAsdu].end()) ? (it->second + this->offSet + noAsdu*this->asduSize) : -1;
     }

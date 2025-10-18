@@ -49,3 +49,12 @@ Started: 2025-10-18
 
 [2025-10-18 00:22:00] STEP 4-prealloc-dsp DONE — Phase 4 complete: eliminated per-frame allocations in hot paths, documented DSP limitations, optimized packet template construction; flamegraph validation pending (commit: 1e7100a)
 
+[2025-10-18 00:23:00] STEP 5.1 DONE — Fixed Real encoding: changed from 4-byte float to 8-byte double per IEC 61850-7-2 standard; added explicit length byte (0x88 tag, 8-byte length, 8-byte IEEE 754 double value); updated memcpy to copy full 8 bytes; added standard-compliant comment (files: IEC61850_Types.hpp, tests: 8-byte Real encoding verification pending)
+
+[2025-10-18 00:24:00] STEP 5.2 DONE — Added has_value() guards to all optional.value() calls in Data::getEncoded(); protects against class invariant violations (all 16 type branches: Array, Structure, Boolean, BitString, Integer, Unsigned, FloatingPoint, Real, OctetString, VisibleString, BinaryTime, Bcd, BooleanArray, ObjId, MmsString, UtcTime); defensive programming for future maintainability (files: IEC61850_Types.hpp, tests: optional access without value pending)
+
+[2025-10-18 00:25:00] STEP 5.3 DONE — Added bounds checking to SampledValue::getParamPos(): validates noAsdu < indices.size() before array access; returns -1 for out-of-bounds to maintain existing error-handling contract (files: SampledValue.hpp, tests: invalid ASDU index rejection pending)
+
+[2025-10-18 00:26:00] STEP 5-encoding DONE — Phase 5 complete: fixed Real encoding to 8-byte double, added optional guards throughout Data class, validated SampledValue indices; ready for commit (files: IEC61850_Types.hpp, SampledValue.hpp, commit: pending)
+
+
