@@ -7,6 +7,55 @@
 
 #include "tests.hpp"
 #include <time.h>
+#include <filesystem>
+#include <stdexcept>
+
+namespace fs = std::filesystem;
+
+// Helper function to sanitize file paths
+std::string sanitizeFileName(const std::string& name) {
+    // Reject dangerous patterns
+    if (name.find("..") != std::string::npos) {
+        throw std::invalid_argument("Path traversal detected: '..' not allowed");
+    }
+    if (name.find("/") != std::string::npos) {
+        throw std::invalid_argument("Directory separators not allowed");
+    }
+    if (name.find("\\") != std::string::npos) {
+        throw std::invalid_argument("Directory separators not allowed");
+    }
+    if (name.empty()) {
+        throw std::invalid_argument("Empty filename not allowed");
+    }
+    
+    // Check for non-printable characters
+    for (char c : name) {
+        if (c < 32 || c > 126) {
+            throw std::invalid_argument("Non-printable characters not allowed");
+        }
+    }
+    
+    // Construct safe path under files/ directory
+    fs::path safePath = fs::path("files") / name;
+    
+    // Ensure the canonical path is still under files/
+    try {
+        fs::path canonicalBase = fs::canonical("files");
+        fs::path canonicalPath = fs::weakly_canonical(safePath);
+        
+        // Check if canonicalPath starts with canonicalBase
+        auto baseStr = canonicalBase.string();
+        auto pathStr = canonicalPath.string();
+        
+        if (pathStr.substr(0, baseStr.length()) != baseStr) {
+            throw std::invalid_argument("Path escapes files/ directory");
+        }
+    } catch (const fs::filesystem_error& e) {
+        throw std::invalid_argument(std::string("Filesystem error: ") + e.what());
+    }
+    
+    return safePath.string();
+}
 
 // Real 
 
@@ -85,7 +134,16 @@ void TCPServer::run() {
 
 // Save any file sent by the client
 std::string save_file2(std::string fileName, const char* buffer, int bytesReceived) {
-    std::ofstream file("files"+fileName, std::ios::app);
+    // Sanitize filename
+    std::string safePath;
+    try {
+        safePath = sanitizeFileName(fileName);
+    } catch (const std::exception& e) {
+        std::cerr << "Invalid filename: " << e.what() << std::endl;
+        return "ERROR: Invalid filename";
+    }
+    
+    std::ofstream file(safePath, std::ios::app);
     if (file.is_open()) {
         file.write(buffer, bytesReceived);
         file.close();
@@ -106,16 +164,42 @@ int32_t save_file(int* clientSocket, char* buffer, int maxBufferSize) {
         return -1;
     }
     send(*clientSocket, "OK", 2, 0);
+    
     std::string fileNameStr(fileName);
     std::cout << "File name received: " << fileNameStr << std::endl;
-    int bytesReceivedFileSize = recv(*clientSocket, buffer, sizeof(buffer), 0);
+    
+    // Sanitize filename
+    std::string safePath;
+    try {
+        safePath = sanitizeFileName(fileNameStr);
+    } catch (const std::exception& e) {
+        std::cerr << "Invalid filename: " << e.what() << std::endl;
+        send(*clientSocket, "ERROR: Invalid filename", 23, 0);
+        return -1;
+    }
+    
+    // Fix: use maxBufferSize instead of sizeof(buffer) which is pointer size
+    int bytesReceivedFileSize = recv(*clientSocket, buffer, maxBufferSize, 0);
     if (bytesReceivedFileSize <= 0) {
         return -1;
     }
     send(*clientSocket, "OK", 2, 0);
-    int fileSize = atoi(buffer);
+    
+    // Fix: use stoi with error handling instead of atoi
+    int fileSize;
+    try {
+        fileSize = std::stoi(std::string(buffer, bytesReceivedFileSize));
+        if (fileSize <= 0 || fileSize > 100*1024*1024) { // 100 MB limit
+            throw std::out_of_range("File size out of range");
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Invalid file size: " << e.what() << std::endl;
+        send(*clientSocket, "ERROR: Invalid file size", 24, 0);
+        return -1;
+    }
+    
     std::cout << "File size received: " << fileSize << std::endl;
-    std::ofstream file("files/" + fileNameStr, std::ios::trunc);
+    std::ofstream file(safePath, std::ios::trunc);
     if (file.is_open()) {
         int totalBytesReceived = 0;
         while (totalBytesReceived < fileSize) {

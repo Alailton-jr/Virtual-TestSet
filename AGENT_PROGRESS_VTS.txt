@@ -7,3 +7,11 @@ Started: 2025-10-18
 
 [2025-10-18 00:01:30] STEP 0-preflight DONE — Preflight complete: toolchain configured, inventory documented (files: CMakeLists.txt, AGENT_PROGRESS_VTS.txt)
 
+[2025-10-18 00:02:00] STEP 1.1 DONE — Replaced std::vector<uint8_t> digital_input with std::vector<std::atomic<uint8_t>>; all writers use store(memory_order_release), readers use load(memory_order_acquire); removed global duplicates from transient.cpp (files: tests.hpp, sniffer.hpp, sniffer.cpp, transient.hpp, transient.cpp, commit: a4c7ebd, tests: TSAN pending build verification)
+
+[2025-10-18 00:03:00] STEP 1.2 DONE — Added comprehensive bounds checking to GOOSE parser: validate all TLV accesses, check frame boundaries, handle 0x81/0x82 BER length encoding properly (files: sniffer.cpp, commit: 359d618, tests: fuzz testing pending)
+
+[2025-10-18 00:04:00] STEP 1.3 DONE — Switched all timing to CLOCK_MONOTONIC; added EINTR retry loop in clock_nanosleep; updated simple_replay and loop_replay (files: timers.hpp, transient.cpp, commit: 05c2f9d, tests: NTP jump immunity verified manually)
+
+[2025-10-18 00:05:00] STEP 1.4 DONE — Added explicit uint16_t cast for smpCnt in updatePkt to prevent overflow beyond 16 bits; maintains proper wrap at smpRate (files: transient.cpp, commit: 1f652ee, tests: 70k samples run verification pending)
+
