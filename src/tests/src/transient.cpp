@@ -103,8 +103,10 @@ int updatePkt(std::vector<std::vector<int32_t>>* buffer, Sv_packet* pkt_info, in
     int restartbuffer = 0;
     for (int num = 0; num < pkt_info->noAsdu; num++){
 
-        pkt_info->base_pkt[pkt_info->smpCnt_pos[num]] = (smpCount >> 8) & 0xFF;
-        pkt_info->base_pkt[pkt_info->smpCnt_pos[num]+1] = (smpCount) & 0xFF;
+        // Ensure smpCount is within 16-bit range
+        uint16_t safe_smpCount = static_cast<uint16_t>(smpCount);
+        pkt_info->base_pkt[pkt_info->smpCnt_pos[num]] = (safe_smpCount >> 8) & 0xFF;
+        pkt_info->base_pkt[pkt_info->smpCnt_pos[num]+1] = safe_smpCount & 0xFF;
 
         for (int cn = 0; cn < pkt_info->noChannels; cn++){
             if ((*buffer)[cn].empty()) continue;
@@ -117,6 +119,7 @@ int updatePkt(std::vector<std::vector<int32_t>>* buffer, Sv_packet* pkt_info, in
         idx = idx + 1;
         smpCount = smpCount + 1;
 
+        // Wrap at sample rate (typically 4800) or enforce 16-bit wrap at 65536
         if (smpCount >= pkt_info->smpRate){
             smpCount = 0;
         }
