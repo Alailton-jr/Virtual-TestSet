@@ -75,7 +75,21 @@ Started: 2025-10-18
 
 [2025-10-18 00:35:00] STEP 7.5 DONE — Updated tools CMakeLists.txt: changed from INTERFACE to STATIC library to build rt_utils.cpp; added PUBLIC include directories for proper linking (files: tools/CMakeLists.txt, tests: build verification pending)
 
-[2025-10-18 00:36:00] STEP 7-rt-foundation DONE — Phase 7 complete: Linux real-time foundations with mlockall, SCHED_FIFO, CPU affinity, EINTR-safe sleep; integrated into main and worker threads; ready for commit (files: rt_utils.hpp, rt_utils.cpp, main.cpp, sniffer.cpp, transient.cpp, tools/CMakeLists.txt, commit: pending)
+[2025-10-18 00:36:00] STEP 7-rt-foundation DONE — Phase 7 complete: Linux real-time foundations with mlockall, SCHED_FIFO, CPU affinity, EINTR-safe sleep; integrated into main and worker threads; ready for commit (files: rt_utils.hpp, rt_utils.cpp, main.cpp, sniffer.cpp, transient.cpp, tools/CMakeLists.txt, commit: cb15ec6)
+
+[2025-10-18 00:37:00] STEP 8.1 DONE — Created packet_ring.hpp: TPACKET_V3 ring buffer interface for zero-copy packet I/O; supports RX/TX rings, BPF filtering, hardware timestamping, fanout, qdisc bypass; comprehensive API with initialize(), get_next_packet(), send_packet(), get_stats(); Linux-specific with graceful degradation (files: packet_ring.hpp, tests: ring buffer allocation pending)
+
+[2025-10-18 00:38:00] STEP 8.2 DONE — Implemented packet_ring.cpp: setup_rx_ring() with TPACKET_V3 (4MB ring, 256 blocks × 16KB, 2048-byte frames); memory-mapped with MAP_SHARED|MAP_LOCKED; bind to sockaddr_ll; promiscuous mode via PACKET_ADD_MEMBERSHIP; block timeout 10ms for low-latency polling (files: packet_ring.cpp, tests: mmap verification pending)
+
+[2025-10-18 00:39:00] STEP 8.3 DONE — Implemented BPF filters: apply_bpf_filter() generates BPF bytecode for SV (0x88ba) and GOOSE (0x88b8); supports VLAN-tagged packets (0x8100) with inner EtherType check; attaches filter with SO_ATTACH_FILTER; reduces CPU load by filtering in kernel (files: packet_ring.cpp, tests: BPF filter verification pending)
+
+[2025-10-18 00:40:00] STEP 8.4 DONE — Implemented hardware timestamping: configure_timestamping() uses SIOCSHWTSTAMP ioctl for RX hardware timestamps (HWTSTAMP_FILTER_ALL); fallback to SO_TIMESTAMPING with SOF_TIMESTAMPING_RX_SOFTWARE|SOFTWARE flags; enables precise packet arrival time measurement (files: packet_ring.cpp, tests: HW timestamp accuracy pending)
+
+[2025-10-18 00:41:00] STEP 8.5 DONE — Implemented optional features: enable_fanout() with PACKET_FANOUT_HASH for load-balancing across multiple sockets; enable_qdisc_bypass() with PACKET_QDISC_BYPASS for low-latency TX (bypasses kernel qdisc layer); both non-fatal if not supported (files: packet_ring.cpp, tests: multi-socket fanout pending)
+
+[2025-10-18 00:42:00] STEP 8.6 DONE — Updated tools/CMakeLists.txt: added packet_ring.cpp to STATIC library build (files: tools/CMakeLists.txt, tests: build verification pending)
+
+[2025-10-18 00:43:00] STEP 8-packet-io DONE — Phase 8 complete: TPACKET_V3 zero-copy packet I/O with BPF filters, hardware timestamping, fanout support; ready for integration into sniffer (files: packet_ring.hpp, packet_ring.cpp, tools/CMakeLists.txt, commit: pending)
 
 
 
