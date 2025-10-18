@@ -18,6 +18,7 @@
 #include <linux/sockios.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include "general_definition.hpp"
 #include <iomanip>
 #include <linux/if_ether.h>
 
@@ -53,10 +54,12 @@ private:
             throw std::runtime_error("Failed to create socket: " + std::string(strerror(errno)));
         }
 
-        if_index = if_nametoindex(IF_NAME);
+        // Phase 6: Use getInterfaceName() for environment variable override support
+        std::string if_name = getInterfaceName();
+        if_index = if_nametoindex(if_name.c_str());
         if (if_index == 0) {
             close(socket_id);
-            throw std::runtime_error("Failed to get interface index for " + std::string(IF_NAME) + ": " + std::string(strerror(errno)));
+            throw std::runtime_error("Failed to get interface index for " + if_name + ": " + std::string(strerror(errno)));
         }
         
         memset(&bind_addr, 0, sizeof(bind_addr)); 

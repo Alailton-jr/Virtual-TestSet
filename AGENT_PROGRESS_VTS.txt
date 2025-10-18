@@ -55,6 +55,14 @@ Started: 2025-10-18
 
 [2025-10-18 00:25:00] STEP 5.3 DONE — Added bounds checking to SampledValue::getParamPos(): validates noAsdu < indices.size() before array access; returns -1 for out-of-bounds to maintain existing error-handling contract (files: SampledValue.hpp, tests: invalid ASDU index rejection pending)
 
-[2025-10-18 00:26:00] STEP 5-encoding DONE — Phase 5 complete: fixed Real encoding to 8-byte double, added optional guards throughout Data class, validated SampledValue indices; ready for commit (files: IEC61850_Types.hpp, SampledValue.hpp, commit: pending)
+[2025-10-18 00:26:00] STEP 5-encoding DONE — Phase 5 complete: fixed Real encoding to 8-byte double, added optional guards throughout Data class, validated SampledValue indices; ready for commit (files: IEC61850_Types.hpp, SampledValue.hpp, commit: 57b463a)
+
+[2025-10-18 00:27:00] STEP 6.1 DONE — Added strict JSON validation to all from_json() functions: required field checks for SampledValue_Config (13 fields), transient_config (10 fields), Goose_info (3 fields); range validation (smpRate > 0, noChannels <= 32, file_data_fs > 0, scale > 0); MAC address format validation (17-char XX:XX:XX:XX:XX:XX with hex digits and colons); structured error messages with std::invalid_argument (files: tests.cpp, tests: invalid config rejection pending)
+
+[2025-10-18 00:28:00] STEP 6.2 DONE — Replaced #define macros with constexpr: IF_NAME → getInterfaceName() function (supports IF_NAME env var override); Sniffer_NoThreads, Sniffer_NoTasks, Sniffer_ThreadPriority, Sniffer_RxSize → constexpr int; Protection_ThreadPriority, PORT, MAX_CLIENTS → constexpr int; type-safe and debuggable (files: general_definition.hpp, raw_socket.hpp, sv_sender.hpp, tests: env override verification pending)
+
+[2025-10-18 00:29:00] STEP 6.3 DONE — Interface name now overridable via IF_NAME environment variable: getInterfaceName() reads env with std::getenv(), falls back to "eth0"; updated all usages in raw_socket.hpp and sv_sender.hpp to call getInterfaceName().c_str(); enables runtime interface selection without recompilation (files: general_definition.hpp, raw_socket.hpp, sv_sender.hpp, tests: IF_NAME=eth1 verification pending)
+
+[2025-10-18 00:30:00] STEP 6-config DONE — Phase 6 complete: strict JSON schema validation with clear errors, #define→constexpr migration, IF_NAME environment override; ready for commit (files: tests.cpp, general_definition.hpp, raw_socket.hpp, sv_sender.hpp, commit: pending)
 
 

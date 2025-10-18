@@ -1,17 +1,25 @@
 #ifndef GENERAL_DEFINITION_HPP
 #define GENERAL_DEFINITION_HPP
 
-#define IF_NAME "eth0"
+#include <cstdlib>
+#include <string>
 
-#define Sniffer_NoThreads 1
-#define Sniffer_NoTasks 12
-#define Sniffer_ThreadPriority 80
-#define Sniffer_RxSize 2048
+// Phase 6: Replace #define with constexpr for type safety and debuggability
+// Interface name can be overridden via IF_NAME environment variable
 
-#define Protection_ThreadPriority 90
+inline std::string getInterfaceName() {
+    const char* env = std::getenv("IF_NAME");
+    return env ? std::string(env) : "eth0";
+}
 
+constexpr int Sniffer_NoThreads = 1;
+constexpr int Sniffer_NoTasks = 12;
+constexpr int Sniffer_ThreadPriority = 80;
+constexpr int Sniffer_RxSize = 2048;
 
-#define PORT 8080
-#define MAX_CLIENTS 10
+constexpr int Protection_ThreadPriority = 90;
+
+constexpr int PORT = 8080;
+constexpr int MAX_CLIENTS = 10;
 
 #endif

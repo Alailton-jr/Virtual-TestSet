@@ -6,6 +6,7 @@
 #include <string>
 #include <inttypes.h>
 #include "raw_socket.hpp"
+#include "general_definition.hpp"
 
 class SampledValue_Config{
 public:
@@ -32,7 +33,8 @@ public:
     uint16_t smpMod;
 public:
     SampledValue_Config(){
-        this->dstMac = GetMACAddress(IF_NAME);
+        // Phase 6: Use getInterfaceName() for environment variable override support
+        this->dstMac = GetMACAddress(getInterfaceName().c_str());
     }
 };
 
