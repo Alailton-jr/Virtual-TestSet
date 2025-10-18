@@ -41,3 +41,11 @@ Started: 2025-10-18
 
 [2025-10-18 00:18:00] STEP 3-threading DONE — Phase 3 complete: proper thread discipline (no detach, all threads joinable), condition variable predicates in while loops, checked pthread operations, drain-on-shutdown for ThreadPool; responsive stop semantics with SO_RCVTIMEO (commit: d294895)
 
+[2025-10-18 00:19:00] STEP 4.1 DONE — Include hygiene: added <algorithm> to signal_processing.hpp for std::min, std::clamp (files: signal_processing.hpp, commit: 1e7100a)
+
+[2025-10-18 00:20:00] STEP 4.2 DONE — Pre-allocation in DSP: resample() now uses reserve() for output vectors, std::move to avoid copies; added documentation about linear interpolation limits (<20% Nyquist); getTransientData() pre-allocates channel_data (files: signal_processing.hpp, transient.cpp, commit: 1e7100a, tests: flamegraph verification pending)
+
+[2025-10-18 00:21:00] STEP 4.3 DONE — Packet template optimization: get_sampledValue_pkt_info() pre-allocates base_pkt (~200 bytes), data_pos, smpCnt_pos vectors; added comments explaining template caching strategy (only dynamic fields need patching per frame) (files: tests.cpp, commit: 1e7100a, tests: zero allocations in sendmsg loop pending)
+
+[2025-10-18 00:22:00] STEP 4-prealloc-dsp DONE — Phase 4 complete: eliminated per-frame allocations in hot paths, documented DSP limitations, optimized packet template construction; flamegraph validation pending (commit: 1e7100a)
+
