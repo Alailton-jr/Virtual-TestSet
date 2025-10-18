@@ -1,6 +1,7 @@
 
 
 #include "sniffer.hpp"
+#include "rt_utils.hpp"
 
 #include <chrono>
 #include <vector>
@@ -205,6 +206,16 @@ void* SnifferThread(void* arg){
 
     auto sniffer_conf = static_cast<SnifferClass*>(arg);
 
+    // Phase 7: Real-time setup for critical sniffer thread
+    std::cout << "[RT] Sniffer thread starting with real-time capabilities..." << std::endl;
+    
+    // Set real-time priority (high priority for packet capture)
+    rt_set_realtime(Sniffer_ThreadPriority);  // Default: 80 (configured in general_definition.hpp)
+    
+    // Optional: Set CPU affinity to isolate sniffer thread
+    // Example: bind to CPUs 2-3 for dedicated packet processing
+    // rt_set_affinity({2, 3});
+    
     sniffer_conf->running.store(true, std::memory_order_release);
 
     // Create local MACs list instead of global

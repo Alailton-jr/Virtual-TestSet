@@ -63,6 +63,19 @@ Started: 2025-10-18
 
 [2025-10-18 00:29:00] STEP 6.3 DONE — Interface name now overridable via IF_NAME environment variable: getInterfaceName() reads env with std::getenv(), falls back to "eth0"; updated all usages in raw_socket.hpp and sv_sender.hpp to call getInterfaceName().c_str(); enables runtime interface selection without recompilation (files: general_definition.hpp, raw_socket.hpp, sv_sender.hpp, tests: IF_NAME=eth1 verification pending)
 
-[2025-10-18 00:30:00] STEP 6-config DONE — Phase 6 complete: strict JSON schema validation with clear errors, #define→constexpr migration, IF_NAME environment override; ready for commit (files: tests.cpp, general_definition.hpp, raw_socket.hpp, sv_sender.hpp, commit: pending)
+[2025-10-18 00:30:00] STEP 6-config DONE — Phase 6 complete: strict JSON schema validation with clear errors, #define→constexpr migration, IF_NAME environment override; ready for commit (files: tests.cpp, general_definition.hpp, raw_socket.hpp, sv_sender.hpp, commit: a6532eb)
+
+[2025-10-18 00:31:00] STEP 7.1 DONE — Created rt_utils.hpp and rt_utils.cpp: Linux-specific real-time utilities with rt_lock_memory() (mlockall MCL_CURRENT|MCL_FUTURE), rt_set_realtime() (SCHED_FIFO 1-99 priority), rt_set_affinity() (CPU pinning), rt_sleep_abs() (clock_nanosleep TIMER_ABSTIME with EINTR retry), rt_open_phc() (optional PTP hardware clock access); all functions have graceful fallback with logging on non-Linux or permission failure (files: rt_utils.hpp, rt_utils.cpp, tests: privilege checks pending)
+
+[2025-10-18 00:32:00] STEP 7.2 DONE — Integrated RT setup in main(): added rt_lock_memory() call at startup to lock all memory pages; prevents paging for deterministic timing; gracefully degrades if lacking CAP_IPC_LOCK capability (files: main.cpp, tests: mlockall verification pending)
+
+[2025-10-18 00:33:00] STEP 7.3 DONE — Integrated RT setup in SnifferThread: calls rt_set_realtime(Sniffer_ThreadPriority=80) for high-priority packet capture; added commented-out CPU affinity example for isolation; ensures responsive packet processing with SCHED_FIFO scheduling (files: sniffer.cpp, tests: SCHED_FIFO verification pending)
+
+[2025-10-18 00:34:00] STEP 7.4 DONE — Integrated RT setup in run_transient_test: calls rt_set_realtime(Protection_ThreadPriority=90) for critical protection logic; higher priority than sniffer for deterministic response; added commented-out CPU affinity example (files: transient.cpp, tests: priority inheritance verification pending)
+
+[2025-10-18 00:35:00] STEP 7.5 DONE — Updated tools CMakeLists.txt: changed from INTERFACE to STATIC library to build rt_utils.cpp; added PUBLIC include directories for proper linking (files: tools/CMakeLists.txt, tests: build verification pending)
+
+[2025-10-18 00:36:00] STEP 7-rt-foundation DONE — Phase 7 complete: Linux real-time foundations with mlockall, SCHED_FIFO, CPU affinity, EINTR-safe sleep; integrated into main and worker threads; ready for commit (files: rt_utils.hpp, rt_utils.cpp, main.cpp, sniffer.cpp, transient.cpp, tools/CMakeLists.txt, commit: pending)
+
 
 

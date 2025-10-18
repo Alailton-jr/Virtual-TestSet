@@ -5,6 +5,7 @@
 #include "signal_processing.hpp"
 #include "timers.hpp"
 #include "tests.hpp"
+#include "rt_utils.hpp"
 #include <time.h>
 
 #include <fstream>
@@ -258,6 +259,17 @@ transient_plan create_plan(transient_config* conf, std::vector<std::vector<int32
 void* run_transient_test(void* arg){
 
     auto conf = reinterpret_cast<transient_config*> (arg);
+    
+    // Phase 7: Real-time setup for critical transient test thread
+    std::cout << "[RT] Transient test thread starting with real-time capabilities..." << std::endl;
+    
+    // Set real-time priority (slightly lower than sniffer for protection logic)
+    rt_set_realtime(Protection_ThreadPriority);  // Default: 90 (configured in general_definition.hpp)
+    
+    // Optional: Set CPU affinity to isolate transient thread
+    // Example: bind to CPU 4 for dedicated protection processing
+    // rt_set_affinity({4});
+    
     conf->running.store(true, std::memory_order_release);
 
     //Only for test - initialize digital input

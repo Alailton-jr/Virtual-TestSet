@@ -1,6 +1,7 @@
 
 #include "main.hpp"
 #include "raw_socket.hpp"
+#include "rt_utils.hpp"
 
 #include "Ethernet.hpp"
 #include "Goose.hpp"
@@ -659,6 +660,18 @@ int main(){
 
     std::cout << "Hello World!" << std::endl;
 
+    // Phase 7: Real-time initialization (Linux only)
+    // Note: These calls require elevated privileges (CAP_SYS_NICE, CAP_IPC_LOCK or root)
+    std::cout << "[RT] Initializing real-time capabilities..." << std::endl;
+    
+    // Lock all memory to prevent paging (critical for deterministic timing)
+    rt_lock_memory();
+    
+    // Set main thread to real-time priority (optional, can be done per-worker instead)
+    // Uncomment if main thread needs RT priority:
+    // rt_set_realtime(50);  // Lower priority than worker threads
+    
+    std::cout << "[RT] Real-time initialization complete" << std::endl;
 
     TCPServer server(8080);
     server.start();
