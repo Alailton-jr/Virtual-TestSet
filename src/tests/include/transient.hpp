@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <inttypes.h>
+#include <atomic>
 #include "sv_sender.hpp"
 #include <pthread.h>
 #include "raw_socket.hpp"
@@ -36,7 +37,7 @@ struct transient_config{
     SampledValue_Config sv_config;
 
     RawSocket* socket;
-    std::vector<uint8_t>* digital_input;
+    std::vector<std::atomic<uint8_t>>* digital_input;
     
 
     int stop, running, error;

@@ -10,8 +10,6 @@
 #include <fstream>
 #include <sstream>
 
-std::vector<uint8_t>* digital_input;
-
 struct transient_plan{
     void (*_execute)(transient_plan* plan);
     void execute(){
@@ -30,6 +28,7 @@ struct transient_plan{
 
     double interval;
     int* stop;
+    std::vector<std::atomic<uint8_t>>* digital_input;
 
     struct timespec real_time_started, real_time_ended;
     double time_started, time_ended;
@@ -161,7 +160,7 @@ void simple_replay(transient_plan* plan){
     timer.start_period(t_ini);
     timer.wait_period(waitPeriod);
     clock_gettime(CLOCK_REALTIME, &t0);
-    while ((!*plan->stop) && (!(*digital_input)[0])){
+    while ((!*plan->stop) && ((*plan->digital_input)[0].load(std::memory_order_acquire) == 0)){
         sizeSented = sendmsg(plan->socket->socket_id, &plan->socket->msg_hdr, 0);
         if (updatePkt(plan->buffer, plan->sv_info, buffer_idx, smpCount)){
             break;
@@ -206,7 +205,7 @@ void loop_replay(transient_plan* plan){
     timer.start_period(t_ini);
     timer.wait_period(waitPeriod);
     clock_gettime(CLOCK_MONOTONIC, &t0);
-    while ((!*plan->stop) && (!(*digital_input)[0])){
+    while ((!*plan->stop) && ((*plan->digital_input)[0].load(std::memory_order_acquire) == 0)){
         sizeSented = sendmsg(plan->socket->socket_id, &plan->socket->msg_hdr, 0);
         updatePkt(plan->buffer, plan->sv_info, buffer_idx, smpCount);
         timer.wait_period(waitPeriod);
@@ -233,6 +232,7 @@ transient_plan create_plan(transient_config* conf, std::vector<std::vector<int32
     plan.stop = &conf->stop;
     plan.sv_info = sv_info;
     plan.socket = socket;
+    plan.digital_input = conf->digital_input;
 
     plan.timedStart = conf->timed_start;
     plan.start_time.tv_sec = conf->start_time / 1e9;
@@ -256,9 +256,8 @@ void* run_transient_test(void* arg){
     conf->running = 1;
     conf->stop = 0;
 
-    //Only for test
-    digital_input = conf->digital_input;
-    (*digital_input)[0] = 0;
+    //Only for test - initialize digital input
+    (*conf->digital_input)[0].store(0, std::memory_order_relaxed);
 
     std::vector<std::vector<int32_t>> buffer = getTransientData(conf);
     if (buffer.empty()){

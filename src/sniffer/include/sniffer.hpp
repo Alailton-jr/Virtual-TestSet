@@ -6,6 +6,7 @@
 #include <string>
 #include <cstdint>
 #include <cstring>
+#include <atomic>
 
 #include "general_definition.hpp"
 #include "raw_socket.hpp"
@@ -31,7 +32,7 @@ public:
     pthread_t thd;
 
     RawSocket socket;
-    std::vector<uint8_t>* digitalInput;
+    std::vector<std::atomic<uint8_t>>* digitalInput;
     std::vector<Goose_info> goInfo;
 
     SnifferClass(){

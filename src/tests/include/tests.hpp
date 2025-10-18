@@ -5,6 +5,7 @@
 #include "Protocols.hpp"
 #include "transient.hpp"
 #include "sniffer.hpp"
+#include <atomic>
 
 std::vector<Goose_info> get_goose_input_config(const std::string& config_path);
 std::vector<transient_config> get_transient_test_config(const std::string& config_path);
@@ -20,7 +21,7 @@ struct Sv_packet{
 
 class Tests_Class{
 public:
-    std::vector<uint8_t> digital_input;
+    std::vector<std::atomic<uint8_t>> digital_input;
     std::vector<transient_config> transient_tests;
     RawSocket raw_socket;
     SnifferClass sniffer;
@@ -33,6 +34,9 @@ public:
 
     Tests_Class(){
         digital_input.resize(16);
+        for(size_t i = 0; i < digital_input.size(); ++i) {
+            digital_input[i].store(0, std::memory_order_relaxed);
+        }
         sniffer.digitalInput = &digital_input;
     }
 

@@ -3,3 +3,7 @@ Started: 2025-10-18
 
 [2025-10-18 00:00:00] STEP 0.1 DONE — Inventory complete: Found AF_PACKET, RawSocket, SCHED_FIFO, clock_nanosleep, sendmsg in raw_socket.hpp, timers.hpp, sniffer.cpp, transient.cpp, tests.hpp; digital_input in tests.hpp (vector), sniffer.hpp (pointer), transient.cpp (global); GOOSE/SV encoding in protocols/include/*.hpp (files: 10+ source files, notes: data races identified, timing uses CLOCK_REALTIME, no bounds checks in parsers)
 
+[2025-10-18 00:01:00] STEP 0.2 DONE — Added strict compiler warnings (-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wdouble-promotion -Werror), sanitizer options (ASAN/TSAN/UBSAN), and minimal ctest target (files: CMakeLists.txt, commit: 02ba6c7)
+
+[2025-10-18 00:01:30] STEP 0-preflight DONE — Preflight complete: toolchain configured, inventory documented (files: CMakeLists.txt, AGENT_PROGRESS_VTS.txt)
+

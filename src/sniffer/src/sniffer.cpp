@@ -96,7 +96,7 @@ void process_GOOSE_packet(uint8_t* frame, ssize_t frameSize, int i){
             std::cerr << "GOOSE Error: Data out of range" << std::endl;
             return;
         }
-        (*sniffer->digitalInput)[dat[0]] = boolDat[dat[1]];
+        (*sniffer->digitalInput)[dat[0]].store(boolDat[dat[1]], std::memory_order_release);
     }
     // std::cout << "GOOSE Received: "<< (boolDat[0] != 0) << std::endl;
 }
