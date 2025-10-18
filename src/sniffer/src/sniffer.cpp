@@ -38,19 +38,32 @@ struct task_arg{
 
 void process_GOOSE_packet(uint8_t* frame, ssize_t frameSize, int i){
 
+    // Validate minimum GOOSE header size
+    if (i + 14 > frameSize) {
+        std::cerr << "GOOSE: truncated header" << std::endl;
+        return;
+    }
+
     // frame[i:i+2] // APPID
     // frame[i+2:i+4] // Length
     // frame[i+4:i+8] // Reserved 1 and 2
     // frame[i+9] // GOOSE TAG
     // frame[i+10] // GOOSE Length
 
-    // i += (frame[i+11] == 0x82) ? 17 : (frame[i+11] == 0x81) ? 16 : 15; 
+    // Parse BER length with bounds checking
     uint16_t length = 0;
     if (frame[i+11] == 0x82){
+        if (i + 14 > frameSize) {
+            std::cerr << "GOOSE: truncated 0x82 length" << std::endl;
+            return;
+        }
+        length = static_cast<uint16_t>((frame[i+12] << 8) | frame[i+13]);
         i += 14;
-        length = frame[i+12] * 256;
-        length += frame[i+13];
     }else if (frame[i+11] == 0x81){
+        if (i + 13 > frameSize) {
+            std::cerr << "GOOSE: truncated 0x81 length" << std::endl;
+            return;
+        }
         length = frame[i+12];
         i += 13;
     }else{
@@ -58,42 +71,86 @@ void process_GOOSE_packet(uint8_t* frame, ssize_t frameSize, int i){
         i += 12;
     }
 
+    // Validate length against remaining frame
+    if (i + length > frameSize) {
+        std::cerr << "GOOSE: PDU length exceeds frame size" << std::endl;
+        return;
+    }
+
     int j = 0, goIdx = -1;
     while (j < length){
-        // uint8_t tag = frame[i+j];
-        // uint8_t length = frame[i+j+1];
-        // uint8_t* data = frame[i+j+2:i+j+length];
+        // Bounds check for TLV access
+        if (i + j + 1 >= frameSize) {
+            std::cerr << "GOOSE: TLV truncated" << std::endl;
+            return;
+        }
 
-        if (frame[i+j] == 0x80){
-            for (int idx = 0; idx < sniffer->goInfo.size(); idx++)
-            if (memcmp(&frame[i+j+2], sniffer->goInfo[idx].goCbRef.data(), frame[i+j+1]) == 0){
-                goIdx = idx;
+        uint8_t tag = frame[i+j];
+        uint8_t tlv_len = frame[i+j+1];
+
+        // Validate TLV data is within bounds
+        if (i + j + 2 + tlv_len > frameSize) {
+            std::cerr << "GOOSE: TLV data exceeds frame" << std::endl;
+            return;
+        }
+
+        if (tag == 0x80){
+            for (size_t idx = 0; idx < sniffer->goInfo.size(); idx++)
+            if (tlv_len <= sniffer->goInfo[idx].goCbRef.size() &&
+                memcmp(&frame[i+j+2], sniffer->goInfo[idx].goCbRef.data(), tlv_len) == 0){
+                goIdx = static_cast<int>(idx);
                 break;
             }
         }
 
-        if (frame[i+j] == 0xab){
+        if (tag == 0xab){
             break;
         }
 
-        j += frame[i+j+1] + 2;
+        j += tlv_len + 2;
     }
+    
     if (goIdx == -1) return;
     i += j;
+    
+    // Parse allData with bounds checking
+    if (i + 1 >= frameSize) {
+        std::cerr << "GOOSE: allData truncated" << std::endl;
+        return;
+    }
+    
     std::vector<uint8_t> boolDat;
     j = 2;
     length = frame[i+1];
+    
+    if (i + length > frameSize) {
+        std::cerr << "GOOSE: allData length exceeds frame" << std::endl;
+        return;
+    }
+    
     while (j < length){
-        if (frame[i+j] == 0x83){
+        if (i + j + 1 >= frameSize) break;
+        
+        uint8_t tag = frame[i+j];
+        uint8_t tlv_len = frame[i+j+1];
+        
+        if (i + j + 2 + tlv_len > frameSize) break;
+        
+        if (tag == 0x83){
             boolDat.push_back(frame[i+j+2]);
         }else{
             boolDat.push_back(0);
         }
-        j += frame[i+j+1] + 2;
+        j += tlv_len + 2;
     }
-    for (auto dat : sniffer->goInfo[goIdx].input){
+    
+    for (const auto& dat : sniffer->goInfo[goIdx].input){
         if (dat[0] >= boolDat.size()){
             std::cerr << "GOOSE Error: Data out of range" << std::endl;
+            return;
+        }
+        if (dat[1] >= boolDat.size()) {
+            std::cerr << "GOOSE Error: GOOSE data index out of range" << std::endl;
             return;
         }
         (*sniffer->digitalInput)[dat[0]].store(boolDat[dat[1]], std::memory_order_release);
