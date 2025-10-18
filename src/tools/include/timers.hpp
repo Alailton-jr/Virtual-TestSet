@@ -3,6 +3,7 @@
 
 #include <time.h>
 #include <iostream>
+#include <cerrno>
 
 
 class Timer{
@@ -18,7 +19,7 @@ public:
     }
 
     void start_period(long period_ns) {
-        clock_gettime(CLOCK_REALTIME, &next_period);
+        clock_gettime(CLOCK_MONOTONIC, &next_period);
         increment_period(period_ns);
     }
 
@@ -28,9 +29,14 @@ public:
     }
 
     void wait_period(long period_ns) {
-        if(clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next_period, NULL) == -1){
-            std::cerr << "Error in clock_nanosleep" << std::endl;
-        };
+        int ret;
+        do {
+            ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_period, NULL);
+        } while (ret == EINTR);
+        
+        if(ret != 0 && ret != EINTR){
+            std::cerr << "Error in clock_nanosleep: " << ret << std::endl;
+        }
         increment_period(period_ns);
     }
 };

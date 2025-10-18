@@ -133,9 +133,9 @@ void simple_replay(transient_plan* plan){
     Timer timer;
     struct timespec t_ini, t_end, t0, t1;
 
-    long waitPeriod = (long)(1e9/plan->sv_info->smpRate);
+    long waitPeriod = static_cast<long>(1e9/plan->sv_info->smpRate);
 
-    clock_gettime(CLOCK_REALTIME, &t_ini);
+    clock_gettime(CLOCK_MONOTONIC, &t_ini);
 
     if (!plan->timedStart){
         if (t_ini.tv_nsec > 5e8){
@@ -159,7 +159,7 @@ void simple_replay(transient_plan* plan){
     updatePkt(plan->buffer, plan->sv_info, buffer_idx, smpCount);
     timer.start_period(t_ini);
     timer.wait_period(waitPeriod);
-    clock_gettime(CLOCK_REALTIME, &t0);
+    clock_gettime(CLOCK_MONOTONIC, &t0);
     while ((!*plan->stop) && ((*plan->digital_input)[0].load(std::memory_order_acquire) == 0)){
         sizeSented = sendmsg(plan->socket->socket_id, &plan->socket->msg_hdr, 0);
         if (updatePkt(plan->buffer, plan->sv_info, buffer_idx, smpCount)){
@@ -168,8 +168,8 @@ void simple_replay(transient_plan* plan){
         nPkts++;
         timer.wait_period(waitPeriod);
     }
-    clock_gettime(CLOCK_REALTIME, &t1);
-    clock_gettime(CLOCK_REALTIME, &t_end);
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    clock_gettime(CLOCK_MONOTONIC, &t_end);
     plan->real_time_started = t_ini;
     plan->real_time_ended = t_end;
     plan->time_started = t0.tv_sec + t0.tv_nsec * 1e-9;
