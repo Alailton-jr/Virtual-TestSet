@@ -6,6 +6,7 @@
 #include "timers.hpp"
 #include "tests.hpp"
 #include "rt_utils.hpp"
+#include "logger.hpp"
 #include <time.h>
 
 #include <fstream>
@@ -74,7 +75,7 @@ std::vector<std::vector<int32_t>> getTransientData(transient_config* conf){
 
     std::vector<std::vector<double>> data = getDataFromCsv(conf->fileName);
     if (data.size() < 1) {
-        std::cout << "File Not Found" << std::endl;
+        LOG_ERROR("TEST", "Transient test data file not found: %s", conf->fileName.c_str());
         return{};
     }
 
@@ -261,7 +262,7 @@ void* run_transient_test(void* arg){
     auto conf = reinterpret_cast<transient_config*> (arg);
     
     // Phase 7: Real-time setup for critical transient test thread
-    std::cout << "[RT] Transient test thread starting with real-time capabilities..." << std::endl;
+    LOG_INFO("TEST", "[RT] Transient test thread starting with real-time capabilities...");
     
     // Set real-time priority (slightly lower than sniffer for protection logic)
     rt_set_realtime(Protection_ThreadPriority);  // Default: 90 (configured in general_definition.hpp)
