@@ -3,6 +3,8 @@
 #include "compat.hpp"
 #include "raw_socket.hpp"
 #include "rt_utils.hpp"
+#include "logger.hpp"
+#include "metrics.hpp"
 
 #include "Ethernet.hpp"
 #include "Goose.hpp"
@@ -96,13 +98,13 @@ void TCPServer::stop() {
 void TCPServer::run() {
     serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocket == -1) {
-        std::cerr << "Failed to create socket.\n";
+        LOG_ERROR("TCP", "Failed to create socket");
         return;
     }
 
     int opt = 1;
     if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
-        std::cerr << "Setsockopt failed: " << strerror(errno) << "\n";
+        LOG_ERROR("TCP", "Setsockopt failed: %s", strerror(errno));
         close(serverSocket);
         return;
     }
@@ -114,16 +116,16 @@ void TCPServer::run() {
     serverAddr.sin_port = htons(port);
 
     if (bind(serverSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == -1) {
-        std::cerr << "Binding failed.\n";
+        LOG_ERROR("TCP", "Binding failed");
         return;
     }
 
     if (listen(serverSocket, 5) == -1) {
-        std::cerr << "Listening failed.\n";
+        LOG_ERROR("TCP", "Listening failed");
         return;
     }
 
-    std::cout << "Server listening on port " << port << std::endl;
+    LOG_INFO("TCP", "Server listening on port %d", port);
 
     while (isRunning) {
         sockaddr_in clientAddr;
@@ -131,7 +133,7 @@ void TCPServer::run() {
         int clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddr, &clientAddrLen);
         if (clientSocket == -1) {
             if (isRunning) {
-                std::cerr << "Accept failed.\n";
+                LOG_ERROR("TCP", "Accept failed");
             }
             continue;
         }
@@ -146,7 +148,7 @@ std::string save_file2(std::string fileName, const char* buffer, int bytesReceiv
     try {
         safePath = sanitizeFileName(fileName);
     } catch (const std::exception& e) {
-        std::cerr << "Invalid filename: " << e.what() << std::endl;
+        LOG_ERROR("FILE", "Invalid filename: %s", e.what());
         return "ERROR: Invalid filename";
     }
     
@@ -154,10 +156,10 @@ std::string save_file2(std::string fileName, const char* buffer, int bytesReceiv
     if (file.is_open()) {
         file.write(buffer, bytesReceived);
         file.close();
-        std::cout << "All data received and saved to file: " << fileName << std::endl;
+        LOG_INFO("FILE", "Data received and saved to file: %s", fileName.c_str());
         return "0";
     } else {
-        std::cerr << "Unable to open file for writing.\n";
+        LOG_ERROR("FILE", "Unable to open file for writing: %s", safePath.c_str());
         return "Unable to open file for writing.";
     }
 }
@@ -173,14 +175,14 @@ int32_t save_file(int* clientSocket, char* buffer, int maxBufferSize) {
     send(*clientSocket, "OK", 2, 0);
     
     std::string fileNameStr(fileName);
-    std::cout << "File name received: " << fileNameStr << std::endl;
+    LOG_INFO("FILE", "File name received: %s", fileNameStr.c_str());
     
     // Sanitize filename
     std::string safePath;
     try {
         safePath = sanitizeFileName(fileNameStr);
     } catch (const std::exception& e) {
-        std::cerr << "Invalid filename: " << e.what() << std::endl;
+        LOG_ERROR("FILE", "Invalid filename: %s", e.what());
         send(*clientSocket, "ERROR: Invalid filename", 23, 0);
         return -1;
     }
@@ -200,19 +202,19 @@ int32_t save_file(int* clientSocket, char* buffer, int maxBufferSize) {
             throw std::out_of_range("File size out of range");
         }
     } catch (const std::exception& e) {
-        std::cerr << "Invalid file size: " << e.what() << std::endl;
+        LOG_ERROR("FILE", "Invalid file size: %s", e.what());
         send(*clientSocket, "ERROR: Invalid file size", 24, 0);
         return -1;
     }
     
-    std::cout << "File size received: " << fileSize << std::endl;
+    LOG_INFO("FILE", "File size received: %d bytes", fileSize);
     std::ofstream file(safePath, std::ios::trunc);
     if (file.is_open()) {
         int totalBytesReceived = 0;
         while (totalBytesReceived < fileSize) {
             int bytesReceived = recv(*clientSocket, buffer, maxBufferSize, 0);
             if (bytesReceived <= 0) {
-                std::cerr << "Error receiving file data.\n";
+                LOG_ERROR("FILE", "Error receiving file data");
                 file.close();
                 return -1;
             }
@@ -221,10 +223,10 @@ int32_t save_file(int* clientSocket, char* buffer, int maxBufferSize) {
             send(*clientSocket, "OK", 2, 0);
         }
         file.close();
-        std::cout << "All data received and saved to file: " << fileNameStr << std::endl;
+        LOG_INFO("FILE", "All data received and saved to file: %s", fileNameStr.c_str());
         return 0;
     } else {
-        std::cerr << "Unable to open file for writing.\n";
+        LOG_ERROR("FILE", "Unable to open file for writing: %s", safePath.c_str());
         return -1;
     }
 }
@@ -238,14 +240,14 @@ int save_goose_input_configFile(int* clientSocket, char* buffer, int maxBufferSi
     }
     send(*clientSocket, "OK", 2, 0);
     int fileSize = atoi(buffer);
-    std::cout << "File size received: " << fileSize << std::endl;
+    LOG_INFO("FILE", "File size received: %d bytes", fileSize);
     std::ofstream file("files/goose_input_config.json", std::ios::trunc);
     if (file.is_open()) {
         int totalBytesReceived = 0;
         while (totalBytesReceived < fileSize) {
             int bytesReceived = recv(*clientSocket, buffer, maxBufferSize, 0);
             if (bytesReceived <= 0) {
-                std::cerr << "Error receiving file data.\n";
+                LOG_ERROR("FILE", "Error receiving file data");
                 file.close();
                 return -1;
             }
@@ -254,10 +256,10 @@ int save_goose_input_configFile(int* clientSocket, char* buffer, int maxBufferSi
             send(*clientSocket, "OK", 2, 0);
         }
         file.close();
-        std::cout << "All data received and saved to file: sniffer_config.json" << std::endl;
+        LOG_INFO("FILE", "All data received and saved to file: sniffer_config.json");
         return 0;
     } else {
-        std::cerr << "Unable to open file for writing.\n";
+        LOG_ERROR("FILE", "Unable to open file for writing: goose_input_config.json");
         return -1;
     }
 }
@@ -660,21 +662,46 @@ void test_server(){
 }
 
 // Phase 11: CLI argument parsing and platform detection
+// Phase 12: Added log level and log file configuration
 struct AppConfig {
     bool no_net = false;      // Disable network operations
     bool selftest = false;    // Run self-test and exit
     bool help = false;        // Show help message
+    LogLevel log_level = LogLevel::INFO;  // Default log level
+    std::string log_file;     // Optional log file (empty = console only)
 };
+
+// Parse log level from string
+LogLevel parseLogLevel(const std::string& level) {
+    if (level == "DEBUG") return LogLevel::DEBUG;
+    if (level == "INFO") return LogLevel::INFO;
+    if (level == "WARN") return LogLevel::WARN;
+    if (level == "ERROR") return LogLevel::ERROR;
+    if (level == "NONE") return LogLevel::NONE;
+    return LogLevel::INFO;  // Default
+}
 
 // Parse command-line arguments
 AppConfig parseArgs(int argc, char* argv[]) {
     AppConfig config;
     
-    // Check environment variable first
+    // Check environment variables
     const char* env_no_net = std::getenv("VTS_NO_NET");
     if (env_no_net && (std::string(env_no_net) == "1" || std::string(env_no_net) == "true")) {
         config.no_net = true;
         std::cout << "[CONFIG] VTS_NO_NET environment variable set - network operations disabled" << std::endl;
+    }
+    
+    const char* env_log_level = std::getenv("VTS_LOG_LEVEL");
+    if (env_log_level) {
+        config.log_level = parseLogLevel(env_log_level);
+        std::cout << "[CONFIG] VTS_LOG_LEVEL=" << env_log_level << std::endl;
+    }
+    
+    const char* env_log_file = std::getenv("VTS_LOG_FILE");
+    if (env_log_file) {
+        config.log_file = env_log_file;
+        std::cout << "[CONFIG] VTS_LOG_FILE=" << env_log_file << std::endl;
     }
     
     // macOS: Default to no-net mode (can be overridden with explicit flag)
@@ -698,6 +725,12 @@ AppConfig parseArgs(int argc, char* argv[]) {
             std::cout << "[CONFIG] --selftest flag specified" << std::endl;
         } else if (arg == "--help" || arg == "-h") {
             config.help = true;
+        } else if (arg == "--log-level" && i + 1 < argc) {
+            config.log_level = parseLogLevel(argv[++i]);
+            std::cout << "[CONFIG] --log-level=" << argv[i] << std::endl;
+        } else if (arg == "--log-file" && i + 1 < argc) {
+            config.log_file = argv[++i];
+            std::cout << "[CONFIG] --log-file=" << config.log_file << std::endl;
         } else {
             std::cerr << "Warning: Unknown argument: " << arg << std::endl;
         }
@@ -711,13 +744,17 @@ void printHelp(const char* progName) {
     std::cout << "Virtual TestSet - IEC 61850 GOOSE/SV Test System\n\n";
     std::cout << "Usage: " << progName << " [OPTIONS]\n\n";
     std::cout << "Options:\n";
-    std::cout << "  --help, -h         Show this help message\n";
-    std::cout << "  --no-net           Disable network operations (safe mode)\n";
-    std::cout << "  --enable-net       Enable network operations (override macOS default)\n";
-    std::cout << "  --selftest         Run self-test and exit (instantiate modules without I/O)\n\n";
+    std::cout << "  --help, -h              Show this help message\n";
+    std::cout << "  --no-net                Disable network operations (safe mode)\n";
+    std::cout << "  --enable-net            Enable network operations (override macOS default)\n";
+    std::cout << "  --selftest              Run self-test and exit (instantiate modules without I/O)\n";
+    std::cout << "  --log-level <level>     Set log level: DEBUG, INFO, WARN, ERROR, NONE (default: INFO)\n";
+    std::cout << "  --log-file <path>       Write logs to file (in addition to console)\n\n";
     std::cout << "Environment Variables:\n";
-    std::cout << "  VTS_NO_NET=1       Disable network operations\n";
-    std::cout << "  IF_NAME=<iface>    Override network interface name\n\n";
+    std::cout << "  VTS_NO_NET=1            Disable network operations\n";
+    std::cout << "  VTS_LOG_LEVEL=<level>   Set log level (DEBUG, INFO, WARN, ERROR, NONE)\n";
+    std::cout << "  VTS_LOG_FILE=<path>     Write logs to file\n";
+    std::cout << "  IF_NAME=<iface>         Override network interface name\n\n";
     std::cout << "Platform: " << vts::platform::get_platform_info() << "\n";
     std::cout << "Network support: " << (vts::platform::network_operations_supported() ? "Yes" : "No") << "\n";
     std::cout << "Real-time support: " << (vts::platform::realtime_operations_supported() ? "Yes" : "No") << "\n\n";
@@ -734,14 +771,18 @@ int main(int argc, char* argv[]){
         return 0;
     }
     
-    std::cout << "==================================================" << std::endl;
-    std::cout << "Virtual TestSet - IEC 61850 GOOSE/SV Test System" << std::endl;
-    std::cout << "Platform: " << vts::platform::get_platform_info() << std::endl;
-    std::cout << "==================================================" << std::endl;
+    // Phase 12: Initialize logger and metrics
+    Logger::init(config.log_level, config.log_file);
+    Metrics::init();
+    
+    LOG_INFO("MAIN", "==================================================");
+    LOG_INFO("MAIN", "Virtual TestSet - IEC 61850 GOOSE/SV Test System");
+    LOG_INFO("MAIN", "Platform: %s", vts::platform::get_platform_info().c_str());
+    LOG_INFO("MAIN", "==================================================");
 
     // Phase 7: Real-time initialization (Linux only)
     // Note: These calls require elevated privileges (CAP_SYS_NICE, CAP_IPC_LOCK or root)
-    std::cout << "[RT] Initializing real-time capabilities..." << std::endl;
+    LOG_INFO("RT", "Initializing real-time capabilities...");
     
     // Lock all memory to prevent paging (critical for deterministic timing)
     rt_lock_memory();
@@ -750,35 +791,39 @@ int main(int argc, char* argv[]){
     // Uncomment if main thread needs RT priority:
     // rt_set_realtime(50);  // Lower priority than worker threads
     
-    std::cout << "[RT] Real-time initialization complete" << std::endl;
+    LOG_INFO("RT", "Real-time initialization complete");
     
     // Phase 11: Self-test mode
     if (config.selftest) {
-        std::cout << "[SELFTEST] Running self-test mode..." << std::endl;
+        LOG_INFO("SELFTEST", "Running self-test mode...");
         
         // Instantiate modules to verify they load correctly
-        std::cout << "[SELFTEST] Testing Ethernet frame creation..." << std::endl;
+        LOG_INFO("SELFTEST", "Testing Ethernet frame creation...");
         // Example: Create an Ethernet frame without sending it
         // Ethernet eth;
         
-        std::cout << "[SELFTEST] Testing GOOSE message creation..." << std::endl;
+        LOG_INFO("SELFTEST", "Testing GOOSE message creation...");
         // Example: Create a GOOSE message without sending it
         // Goose goose;
         
-        std::cout << "[SELFTEST] Testing SampledValue message creation..." << std::endl;
+        LOG_INFO("SELFTEST", "Testing SampledValue message creation...");
         // Example: Create an SV message without sending it
         // SampledValue sv;
         
-        std::cout << "[SELFTEST] All modules instantiated successfully!" << std::endl;
-        std::cout << "[SELFTEST] Self-test passed. Exiting." << std::endl;
+        LOG_INFO("SELFTEST", "All modules instantiated successfully!");
+        LOG_INFO("SELFTEST", "Self-test passed. Exiting.");
+        
+        // Cleanup
+        Metrics::printSummary();
+        Logger::shutdown();
         return 0;
     }
     
     // Phase 11: Check if network operations are allowed
     if (config.no_net) {
-        std::cout << "[NET] Network operations disabled (--no-net mode)" << std::endl;
-        std::cout << "[NET] Sniffer and packet transmission will be skipped" << std::endl;
-        std::cout << "[NET] Running in configuration/setup validation mode only" << std::endl;
+        LOG_INFO("NET", "Network operations disabled (--no-net mode)");
+        LOG_INFO("NET", "Sniffer and packet transmission will be skipped");
+        LOG_INFO("NET", "Running in configuration/setup validation mode only");
         
         // Allow the application to continue but skip network initialization
         // The TCP server can still run for API access
@@ -794,6 +839,10 @@ int main(int argc, char* argv[]){
     // while (1){
     //     sleep(1);
     // }
+    
+    // Cleanup
+    Metrics::printSummary();
+    Logger::shutdown();
 
     return 0;
 }
