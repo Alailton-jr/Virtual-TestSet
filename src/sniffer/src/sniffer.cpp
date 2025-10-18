@@ -2,11 +2,12 @@
 
 #include "sniffer.hpp"
 #include "rt_utils.hpp"
+#include "logger.hpp"
+#include "metrics.hpp"
 
 #include <chrono>
 #include <vector>
 #include <numeric>
-#include <iostream>
 #include <thread>
 
 #include <sys/types.h>
@@ -44,7 +45,8 @@ void process_GOOSE_packet(uint8_t* frame, ssize_t frameSize, int i, SnifferClass
 
     // Validate minimum GOOSE header size
     if (i + 14 > frameSize) {
-        std::cerr << "GOOSE: truncated header" << std::endl;
+        LOG_ERROR("GOOSE", "Truncated header (frameSize=%zd, position=%d)", frameSize, i);
+        METRIC_PARSE_ERROR();
         return;
     }
 
@@ -58,14 +60,16 @@ void process_GOOSE_packet(uint8_t* frame, ssize_t frameSize, int i, SnifferClass
     uint16_t length = 0;
     if (frame[i+11] == 0x82){
         if (i + 14 > frameSize) {
-            std::cerr << "GOOSE: truncated 0x82 length" << std::endl;
+            LOG_ERROR("GOOSE", "Truncated 0x82 length field (frameSize=%zd, position=%d)", frameSize, i);
+            METRIC_PARSE_ERROR();
             return;
         }
         length = static_cast<uint16_t>((frame[i+12] << 8) | frame[i+13]);
         i += 14;
     }else if (frame[i+11] == 0x81){
         if (i + 13 > frameSize) {
-            std::cerr << "GOOSE: truncated 0x81 length" << std::endl;
+            LOG_ERROR("GOOSE", "Truncated 0x81 length field (frameSize=%zd, position=%d)", frameSize, i);
+            METRIC_PARSE_ERROR();
             return;
         }
         length = frame[i+12];
@@ -77,7 +81,9 @@ void process_GOOSE_packet(uint8_t* frame, ssize_t frameSize, int i, SnifferClass
 
     // Validate length against remaining frame
     if (i + length > frameSize) {
-        std::cerr << "GOOSE: PDU length exceeds frame size" << std::endl;
+        LOG_ERROR("GOOSE", "PDU length exceeds frame size (length=%u, frameSize=%zd, position=%d)", 
+                  length, frameSize, i);
+        METRIC_PARSE_ERROR();
         return;
     }
 
@@ -85,7 +91,8 @@ void process_GOOSE_packet(uint8_t* frame, ssize_t frameSize, int i, SnifferClass
     while (j < length){
         // Bounds check for TLV access
         if (i + j + 1 >= frameSize) {
-            std::cerr << "GOOSE: TLV truncated" << std::endl;
+            LOG_ERROR("GOOSE", "TLV truncated (frameSize=%zd, position=%d)", frameSize, i + j);
+            METRIC_PARSE_ERROR();
             return;
         }
 
@@ -94,7 +101,9 @@ void process_GOOSE_packet(uint8_t* frame, ssize_t frameSize, int i, SnifferClass
 
         // Validate TLV data is within bounds
         if (i + j + 2 + tlv_len > frameSize) {
-            std::cerr << "GOOSE: TLV data exceeds frame" << std::endl;
+            LOG_ERROR("GOOSE", "TLV data exceeds frame (frameSize=%zd, position=%d, tlv_len=%u)", 
+                      frameSize, i + j, tlv_len);
+            METRIC_PARSE_ERROR();
             return;
         }
 
@@ -119,7 +128,8 @@ void process_GOOSE_packet(uint8_t* frame, ssize_t frameSize, int i, SnifferClass
     
     // Parse allData with bounds checking
     if (i + 1 >= frameSize) {
-        std::cerr << "GOOSE: allData truncated" << std::endl;
+        LOG_ERROR("GOOSE", "allData truncated (frameSize=%zd, position=%d)", frameSize, i);
+        METRIC_PARSE_ERROR();
         return;
     }
     
@@ -128,7 +138,9 @@ void process_GOOSE_packet(uint8_t* frame, ssize_t frameSize, int i, SnifferClass
     length = frame[i+1];
     
     if (i + length > frameSize) {
-        std::cerr << "GOOSE: allData length exceeds frame" << std::endl;
+        LOG_ERROR("GOOSE", "allData length exceeds frame (length=%u, frameSize=%zd, position=%d)", 
+                  length, frameSize, i);
+        METRIC_PARSE_ERROR();
         return;
     }
     
@@ -150,15 +162,22 @@ void process_GOOSE_packet(uint8_t* frame, ssize_t frameSize, int i, SnifferClass
     
     for (const auto& dat : sniffer->goInfo[goIdx].input){
         if (dat[0] >= boolDat.size()){
-            std::cerr << "GOOSE Error: Data out of range" << std::endl;
+            LOG_ERROR("GOOSE", "Data index out of range (dat[0]=%u, boolDat.size=%zu)", 
+                      dat[0], boolDat.size());
+            METRIC_PARSE_ERROR();
             return;
         }
         if (dat[1] >= boolDat.size()) {
-            std::cerr << "GOOSE Error: GOOSE data index out of range" << std::endl;
+            LOG_ERROR("GOOSE", "GOOSE data index out of range (dat[1]=%u, boolDat.size=%zu)", 
+                      dat[1], boolDat.size());
+            METRIC_PARSE_ERROR();
             return;
         }
         (*sniffer->digitalInput)[dat[0]].store(boolDat[dat[1]], std::memory_order_release);
     }
+    
+    // Successfully received and parsed GOOSE packet
+    METRIC_RECV_FRAME();
     // std::cout << "GOOSE Received: "<< (boolDat[0] != 0) << std::endl;
 }
 
@@ -207,7 +226,7 @@ void* SnifferThread(void* arg){
     auto sniffer_conf = static_cast<SnifferClass*>(arg);
 
     // Phase 7: Real-time setup for critical sniffer thread
-    std::cout << "[RT] Sniffer thread starting with real-time capabilities..." << std::endl;
+    LOG_INFO("SNIFFER", "Thread starting with real-time capabilities...");
     
     // Set real-time priority (high priority for packet capture)
     rt_set_realtime(Sniffer_ThreadPriority);  // Default: 80 (configured in general_definition.hpp)
@@ -231,7 +250,7 @@ void* SnifferThread(void* arg){
     timeout.tv_sec  = 0;
     timeout.tv_usec = 100000; // 100ms
     if (setsockopt(raw_socket->socket_id, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1) {
-        std::cerr << "Warning: Failed to set SO_RCVTIMEO: " << strerror(errno) << std::endl;
+        LOG_WARN("SNIFFER", "Failed to set SO_RCVTIMEO: %s", strerror(errno));
     }
     
     // ThreadPool<void(task_arg*)> pool(sniffer_conf->noThreads, sniffer_conf->noTasks, sniffer_conf->priority);
@@ -252,12 +271,12 @@ void* SnifferThread(void* arg){
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 continue; // Timeout, check stop condition
             }
-            std::cerr << "Failed to receive message: " << strerror(errno) << std::endl;
+            LOG_ERROR("SNIFFER", "Failed to receive message: %s", strerror(errno));
             continue;
         }
         
         if (rx_bytes > Sniffer_RxSize) {
-            std::cerr << "Received message too large" << std::endl;
+            LOG_ERROR("SNIFFER", "Received message too large (rxBytes=%zd, maxSize=%d)", rx_bytes, Sniffer_RxSize);
             continue;
         }
   
