@@ -1,134 +1,101 @@
 # Virtual Test Set (VTS)
 
-**Real-Time IEC 61850 GOOSE & Sampled Values Test Generator**
+**Comprehensive IEC 61850 Relay Testing Platform**
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](BUILD_STATUS.md)
-[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS-blue)](README-macos.md)
+[![Build Status](https://img.shields.io/badge/build-in--progress-yellow)](backend/BUILD_STATUS.md)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS-blue)](backend/README-macos.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ---
 
 ## Overview
 
-Virtual Test Set is a **high-performance, real-time** network test generator for **IEC 61850-9-2 Sampled Values (SV)** and **IEC 61850-8-1 GOOSE** protocols. Designed for:
+Virtual Test Set is a **modern, web-based relay testing platform** for **IEC 61850-9-2 Sampled Values (SV)** and **IEC 61850-8-1 GOOSE** protocols. Built with:
 
-- **Protection relay testing** - Generate transient fault scenarios with microsecond precision
-- **IED integration testing** - Validate GOOSE/SV interoperability across vendors
-- **Network performance testing** - High-rate packet generation with hardware timestamping
-- **Protocol conformance** - IEC 61850 compliant encoding with BER/ASN.1 validation
+- **Backend**: C++ high-performance vIED (virtual Intelligent Electronic Device)
+- **Frontend**: React + TypeScript modern web UI
+- **Infrastructure**: Docker-based deployment with real-time capabilities
 
 ### Key Features
 
+✅ **Comprehensive Test Modules**
+- **Manual Phasor Injection** - Real-time voltage/current control with harmonics
+- **COMTRADE/CSV Playback** - Replay recorded disturbances
+- **Sequence Testing** - Multi-state fault scenarios with auto/GOOSE transitions
+- **Network Analyzer** - FFT-based phasor measurement and harmonics analysis
+- **GOOSE Monitoring** - Subscription and trip rule evaluation
+- **Ramping Tests** - Pickup/dropoff characterization
+- **Distance Relay (21)** - R-X plane testing with zone verification
+- **Overcurrent (50/51)** - IDMT curve validation
+- **Differential (87)** - Restraint/operating characteristic testing
+
+✅ **Modern Architecture**
+- RESTful API for control and configuration
+- WebSocket streaming for real-time data
+- JSON schema-validated API contracts
+- Comprehensive test coverage (unit, integration, e2e)
+
 ✅ **Real-Time Performance**
 - SCHED_FIFO scheduling with priority 80-90
-- Memory locking (`mlockall`) to prevent paging
-- CLOCK_MONOTONIC timers immune to NTP adjustments
-- Zero-copy packet I/O with TPACKET_V3 ring buffers (Linux)
+- Memory locking to prevent paging
+- CLOCK_MONOTONIC timers for deterministic timing
+- Host network mode for minimum latency
 
-✅ **IEC 61850 Protocol Support**
-- **GOOSE**: Multicast control messages with retransmission logic
-- **SV**: 4800/9600 Hz sampled data with 16-bit `smpCnt` wrapping
-- Full BER/ASN.1 encoding with 0x81/0x82 length forms
-- VLAN 802.1Q tagging with priority validation
-
-✅ **Advanced Testing**
-- Transient fault injection (voltage/current waveforms from CSV)
-- Digital input triggering for event sequences
-- Configurable phase shift, magnitude, and sampling rates
-- JSON configuration for reproducible test scenarios
-
-✅ **Cross-Platform**
-- **Linux**: Full real-time mode with AF_PACKET raw sockets
-- **macOS**: Development mode with `--no-net` for config validation
-- Docker deployment with RT kernel support
-
-✅ **Observability**
-- Structured logging with thread-safe output and microsecond timestamps
-- Metrics system (packet drops, parse errors, timing outliers)
-- Google Test unit tests (50 tests: BER encoding, VLAN, MAC parsing, smpCnt)
-- Sanitizer support (ASAN/TSAN/UBSAN) for CI/CD
+✅ **Developer-Friendly**
+- Docker Compose orchestration (dev and RT profiles)
+- Hot-reload development mode
+- Comprehensive documentation
+- CI/CD pipeline with automated testing
 
 ---
 
-## Quick Start
+## Repository Structure
 
-### Prerequisites
+This repository is organized into two main components:
 
-**Linux** (recommended for production):
-- Ubuntu 22.04+ or RHEL 8+
-- RT kernel (PREEMPT_RT) for deterministic performance
-- Network interface with raw socket support
-- CMake 3.14+, GCC 11+
-- Dependencies: `libfftw3-dev`, `nlohmann-json3-dev`
+- **`backend/`** - C/C++ core engine for IEC 61850 protocol handling and real-time packet generation
+- **`frontend/`** - *(Coming soon)* Web-based control interface for managing the backend
 
-**macOS** (development only):
-- macOS 12+ (Monterey or later)
-- Xcode Command Line Tools
-- CMake 3.14+
-- Dependencies: `fftw` (via Homebrew)
+### Backend (C/C++ Core Engine)
 
-### Build (Linux)
+The backend contains the high-performance, real-time test generator. See [`backend/README.md`](backend/README.md) for detailed documentation.
+
+**Quick Start:**
 
 ```bash
-# Clone repository
-git clone https://github.com/your-org/Virtual-TestSet.git
-cd Virtual-TestSet
+# Navigate to backend
+cd backend
 
-# Install dependencies (Ubuntu)
-sudo apt-get install -y cmake build-essential libfftw3-dev nlohmann-json3-dev
-
-# Build with strict warnings
+# Build (Linux)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
-
-# Run self-test (verify modules instantiate)
 ./build/vts --selftest
 
-# Run with network interface
-sudo ./build/vts --log-level INFO
-```
-
-### Build (macOS)
-
-```bash
-# Install dependencies
-brew install cmake fftw nlohmann-json
-
-# Build with macOS preset
+# Build (macOS)
 ./scripts/build_macos.sh
-
-# Run in no-network mode (config validation)
 ./scripts/run_macos_no_net.sh --selftest
+
+# Using Docker
+docker-compose up
 ```
 
-See [README-macos.md](README-macos.md) for detailed macOS instructions.
-
-### Docker Deployment (Linux RT Host)
-
-```bash
-# Build Docker image
-docker build -t vts:latest .
-
-# Run with host networking and RT capabilities
-docker-compose up -d
-
-# View logs
-docker-compose logs -f vts
-
-# Check metrics
-docker-compose exec vts cat /app/logs/metrics.json
-```
-
-See [README-RT.md](README-RT.md) for comprehensive RT deployment guide.
+For comprehensive build instructions, see:
+- [Backend README](backend/README.md)
+- [macOS Build Guide](backend/README-macos.md)
+- [Docker Deployment](backend/README_DOCKER.md)
+- [Real-Time Configuration](backend/README-RT.md)
 
 ---
 
 ## Usage
 
+*Note: All commands should be run from the `backend/` directory.*
+
 ### Command-Line Options
 
 ```bash
-./vts [OPTIONS]
+cd backend
+./build/vts [OPTIONS]
 
 Options:
   --help, -h              Show help message
