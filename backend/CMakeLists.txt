@@ -31,7 +31,16 @@ if(ENABLE_UBSAN)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=undefined")
 endif()
 
-# find_package(nlohmann_json 3.2.0 REQUIRED)
+# Third-party dependencies
+include_directories(
+    ${CMAKE_SOURCE_DIR}/third_party/cpp-httplib
+    ${CMAKE_SOURCE_DIR}/third_party/websocketpp
+    ${CMAKE_SOURCE_DIR}/third_party/json/include
+    ${CMAKE_SOURCE_DIR}/third_party/asio/asio/include
+)
+
+# Define ASIO_STANDALONE to use asio without Boost
+add_definitions(-DASIO_STANDALONE)
 
 # Find fftw3 library
 find_library(FFTW3_LIBRARY NAMES fftw3 PATHS /opt/homebrew/opt/fftw/lib /usr/local/lib /usr/lib)
@@ -39,6 +48,9 @@ if(NOT FFTW3_LIBRARY)
     message(FATAL_ERROR "fftw3 library not found. Please install it via: brew install fftw")
 endif()
 message(STATUS "Found fftw3 library: ${FFTW3_LIBRARY}")
+
+# Find pthread library (required by websocketpp and asio)
+find_package(Threads REQUIRED)
 
 # Subdirectories
 add_subdirectory(src/platform)
@@ -48,6 +60,7 @@ add_subdirectory(src/tools)
 add_subdirectory(src/sampledValue)
 add_subdirectory(src/tests)
 add_subdirectory(src/sniffer)
+add_subdirectory(src/goose)
 
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/files
