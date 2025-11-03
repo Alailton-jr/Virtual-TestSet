@@ -1,7 +1,9 @@
 #include "http_server.hpp"
+#include "sv_publisher_manager.hpp"
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <ctime>
 
 HTTPServer::HTTPServer(int port)
     : port_(port), running_(false) {
@@ -15,7 +17,7 @@ HTTPServer::~HTTPServer() {
 
 void HTTPServer::setupRoutes() {
     // CORS headers for development
-    server_->set_post_routing_handler([](const httplib::Request& req, httplib::Response& res) {
+    server_->set_post_routing_handler([](const httplib::Request& /*req*/, httplib::Response& res) {
         res.set_header("Access-Control-Allow-Origin", "*");
         res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
         res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -156,8 +158,8 @@ void HTTPServer::stop() {
     std::cout << "HTTP server stopped" << std::endl;
 }
 
-void HTTPServer::setPublisherManager(std::shared_ptr<SVPublisherManager> manager) {
-    publisherManager_ = manager;
+void HTTPServer::setSVPublisherManager(std::shared_ptr<SVPublisherManager> manager) {
+    svManager_ = manager;
 }
 
 void HTTPServer::setSequenceEngine(std::shared_ptr<SequenceEngine> engine) {
@@ -173,7 +175,7 @@ void HTTPServer::setAnalyzerEngine(std::shared_ptr<AnalyzerEngine> analyzer) {
 }
 
 // Health endpoint
-void HTTPServer::handleHealth(const httplib::Request& req, httplib::Response& res) {
+void HTTPServer::handleHealth(const httplib::Request& /*req*/, httplib::Response& res) {
     json response = {
         {"status", "ok"},
         {"timestamp", std::time(nullptr)},
@@ -183,21 +185,22 @@ void HTTPServer::handleHealth(const httplib::Request& req, httplib::Response& re
 }
 
 // Stream management endpoints
-void HTTPServer::handleGetStreams(const httplib::Request& req, httplib::Response& res) {
-    if (!publisherManager_) {
+void HTTPServer::handleGetStreams(const httplib::Request& /*req*/, httplib::Response& res) {
+    if (!svManager_) {
         sendErrorResponse(res, 503, "Publisher manager not initialized");
         return;
     }
     
-    // TODO: Implement actual stream listing
-    json response = {
-        {"streams", json::array()}
-    };
-    sendJsonResponse(res, 200, response);
+    try {
+        json streams = svManager_->listStreams();
+        sendJsonResponse(res, 200, streams);
+    } catch (const std::exception& e) {
+        sendErrorResponse(res, 500, std::string("Failed to list streams: ") + e.what());
+    }
 }
 
 void HTTPServer::handleCreateStream(const httplib::Request& req, httplib::Response& res) {
-    if (!publisherManager_) {
+    if (!svManager_) {
         sendErrorResponse(res, 503, "Publisher manager not initialized");
         return;
     }
@@ -206,20 +209,22 @@ void HTTPServer::handleCreateStream(const httplib::Request& req, httplib::Respon
         json body = json::parse(req.body);
         
         // TODO: Validate against stream-config.schema.json
-        // TODO: Call publisherManager_->createStream(body)
+        std::string streamId = svManager_->createStream(body);
         
         json response = {
-            {"id", "stream-" + std::to_string(std::time(nullptr))},
+            {"id", streamId},
             {"message", "Stream created successfully"}
         };
         sendJsonResponse(res, 201, response);
     } catch (const json::exception& e) {
         sendErrorResponse(res, 400, std::string("Invalid JSON: ") + e.what());
+    } catch (const std::exception& e) {
+        sendErrorResponse(res, 500, std::string("Failed to create stream: ") + e.what());
     }
 }
 
 void HTTPServer::handleUpdateStream(const httplib::Request& req, httplib::Response& res) {
-    if (!publisherManager_) {
+    if (!svManager_) {
         sendErrorResponse(res, 503, "Publisher manager not initialized");
         return;
     }
@@ -228,8 +233,7 @@ void HTTPServer::handleUpdateStream(const httplib::Request& req, httplib::Respon
     
     try {
         json body = json::parse(req.body);
-        
-        // TODO: Implement actual stream update
+        svManager_->updateStream(streamId, body);
         
         json response = {
             {"id", streamId},
@@ -238,91 +242,117 @@ void HTTPServer::handleUpdateStream(const httplib::Request& req, httplib::Respon
         sendJsonResponse(res, 200, response);
     } catch (const json::exception& e) {
         sendErrorResponse(res, 400, std::string("Invalid JSON: ") + e.what());
+    } catch (const std::exception& e) {
+        sendErrorResponse(res, 500, std::string("Failed to update stream: ") + e.what());
     }
 }
 
 void HTTPServer::handleDeleteStream(const httplib::Request& req, httplib::Response& res) {
-    if (!publisherManager_) {
+    if (!svManager_) {
         sendErrorResponse(res, 503, "Publisher manager not initialized");
         return;
     }
     
     std::string streamId = req.path_params.at("id");
     
-    // TODO: Implement actual stream deletion
-    
-    json response = {
-        {"id", streamId},
-        {"message", "Stream deleted successfully"}
-    };
-    sendJsonResponse(res, 200, response);
+    try {
+        svManager_->deleteStream(streamId);
+        
+        json response = {
+            {"id", streamId},
+            {"message", "Stream deleted successfully"}
+        };
+        sendJsonResponse(res, 200, response);
+    } catch (const std::exception& e) {
+        sendErrorResponse(res, 500, std::string("Failed to delete stream: ") + e.what());
+    }
 }
 
 void HTTPServer::handleStartStream(const httplib::Request& req, httplib::Response& res) {
-    if (!publisherManager_) {
+    if (!svManager_) {
         sendErrorResponse(res, 503, "Publisher manager not initialized");
         return;
     }
     
     std::string streamId = req.path_params.at("id");
     
-    // TODO: Implement actual stream start
-    
-    json response = {
-        {"id", streamId},
-        {"message", "Stream started successfully"}
-    };
-    sendJsonResponse(res, 200, response);
+    try {
+        svManager_->startStream(streamId);
+        
+        json response = {
+            {"id", streamId},
+            {"message", "Stream started successfully"}
+        };
+        sendJsonResponse(res, 200, response);
+    } catch (const std::exception& e) {
+        sendErrorResponse(res, 500, std::string("Failed to start stream: ") + e.what());
+    }
 }
 
 void HTTPServer::handleStopStream(const httplib::Request& req, httplib::Response& res) {
-    if (!publisherManager_) {
+    if (!svManager_) {
         sendErrorResponse(res, 503, "Publisher manager not initialized");
         return;
     }
     
     std::string streamId = req.path_params.at("id");
     
-    // TODO: Implement actual stream stop
-    
-    json response = {
-        {"id", streamId},
-        {"message", "Stream stopped successfully"}
-    };
-    sendJsonResponse(res, 200, response);
+    try {
+        svManager_->stopStream(streamId);
+        
+        json response = {
+            {"id", streamId},
+            {"message", "Stream stopped successfully"}
+        };
+        sendJsonResponse(res, 200, response);
+    } catch (const std::exception& e) {
+        sendErrorResponse(res, 500, std::string("Failed to stop stream: ") + e.what());
+    }
 }
 
 // Phasor endpoints
 void HTTPServer::handleUpdatePhasors(const httplib::Request& req, httplib::Response& res) {
+    if (!svManager_) {
+        sendErrorResponse(res, 503, "Publisher manager not initialized");
+        return;
+    }
+    
     std::string streamId = req.path_params.at("streamId");
     
     try {
         json body = json::parse(req.body);
-        
-        // TODO: Validate and apply phasor update
+        svManager_->updatePhasors(streamId, body);
         
         sendJsonResponse(res, 200, {{"message", "Phasors updated"}});
     } catch (const json::exception& e) {
         sendErrorResponse(res, 400, std::string("Invalid JSON: ") + e.what());
+    } catch (const std::exception& e) {
+        sendErrorResponse(res, 500, std::string("Failed to update phasors: ") + e.what());
     }
 }
 
 void HTTPServer::handleUpdateHarmonics(const httplib::Request& req, httplib::Response& res) {
+    if (!svManager_) {
+        sendErrorResponse(res, 503, "Publisher manager not initialized");
+        return;
+    }
+    
     std::string streamId = req.path_params.at("streamId");
     
     try {
         json body = json::parse(req.body);
-        
-        // TODO: Validate and apply harmonics update
+        svManager_->updateHarmonics(streamId, body);
         
         sendJsonResponse(res, 200, {{"message", "Harmonics updated"}});
     } catch (const json::exception& e) {
         sendErrorResponse(res, 400, std::string("Invalid JSON: ") + e.what());
+    } catch (const std::exception& e) {
+        sendErrorResponse(res, 500, std::string("Failed to update harmonics: ") + e.what());
     }
 }
 
 // COMTRADE playback endpoint
-void HTTPServer::handleComtradePlayback(const httplib::Request& req, httplib::Response& res) {
+void HTTPServer::handleComtradePlayback(const httplib::Request& /*req*/, httplib::Response& res) {
     // TODO: Handle multipart/form-data file upload
     sendErrorResponse(res, 501, "COMTRADE playback not yet implemented");
 }
@@ -340,13 +370,13 @@ void HTTPServer::handleSequenceRun(const httplib::Request& req, httplib::Respons
     }
 }
 
-void HTTPServer::handleSequenceStop(const httplib::Request& req, httplib::Response& res) {
+void HTTPServer::handleSequenceStop(const httplib::Request& /*req*/, httplib::Response& res) {
     // TODO: Stop sequence execution
     sendJsonResponse(res, 200, {{"message", "Sequence stopped"}});
 }
 
 // GOOSE endpoints
-void HTTPServer::handleGooseScan(const httplib::Request& req, httplib::Response& res) {
+void HTTPServer::handleGooseScan(const httplib::Request& /*req*/, httplib::Response& res) {
     // TODO: Scan for GOOSE messages
     sendJsonResponse(res, 200, {{"entries", json::array()}});
 }
@@ -455,7 +485,7 @@ void HTTPServer::sendErrorResponse(httplib::Response& res, int status, const std
     sendJsonResponse(res, status, error);
 }
 
-bool HTTPServer::validateJson(const json& data, const std::string& schemaName) {
+bool HTTPServer::validateJson(const json& /*data*/, const std::string& /*schemaName*/) {
     // TODO: Implement JSON schema validation
     return true;
 }

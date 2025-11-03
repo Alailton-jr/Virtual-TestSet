@@ -13,6 +13,8 @@
 #include "sv_sender.hpp"
 
 #include "tests.hpp"
+#include "http_server.hpp"
+#include "sv_publisher_manager.hpp"
 #include <time.h>
 #include <filesystem>
 #include <stdexcept>
@@ -856,15 +858,30 @@ int main(int argc, char* argv[]){
     // Start TCP server (can run without network I/O)
     TCPServer server(8080);
     server.start();
-
-    // get UTC time in nanoseconds now
-    // test_Sniffer();
-    // testTransient();
-    // while (1){
-    //     sleep(1);
-    // }
     
-    // Cleanup
+    // Initialize HTTP server and SV Publisher Manager
+    LOG_INFO("HTTP", "Initializing HTTP API server and SV Publisher Manager...");
+    auto svManager = std::make_shared<SVPublisherManager>();
+    
+    HTTPServer httpServer(8081);  // Use different port than TCP server
+    httpServer.setSVPublisherManager(svManager);
+    httpServer.start();
+    
+    LOG_INFO("HTTP", "HTTP API server running on port 8081");
+    LOG_INFO("HTTP", "API endpoints available at http://localhost:8081/api/v1/");
+
+    // Main tick loop for SV publishers
+    LOG_INFO("SV", "Starting SV publisher tick loop...");
+    while (true) {
+        svManager->tickAll();
+        
+        // Sleep for 100 microseconds between ticks
+        // This gives ~10kHz tick rate which is more than sufficient for 4800 samples/sec
+        std::this_thread::sleep_for(std::chrono::microseconds(100));
+    }
+    
+    // Cleanup (unreachable in current implementation - would need signal handler)
+    httpServer.stop();
     Metrics::printSummary();
     Logger::shutdown();
 

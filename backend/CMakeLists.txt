@@ -61,6 +61,9 @@ add_subdirectory(src/sampledValue)
 add_subdirectory(src/tests)
 add_subdirectory(src/sniffer)
 add_subdirectory(src/goose)
+add_subdirectory(src/api)
+add_subdirectory(src/core)
+add_subdirectory(src/synth)
 
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/files

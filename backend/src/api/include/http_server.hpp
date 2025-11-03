@@ -27,7 +27,7 @@ public:
     bool isRunning() const { return running_.load(); }
 
     // Set component references
-    void setPublisherManager(std::shared_ptr<SVPublisherManager> manager);
+    void setSVPublisherManager(std::shared_ptr<SVPublisherManager> manager);
     void setSequenceEngine(std::shared_ptr<SequenceEngine> engine);
     void setGooseSubscriber(std::shared_ptr<GooseSubscriber> subscriber);
     void setAnalyzerEngine(std::shared_ptr<AnalyzerEngine> analyzer);
@@ -91,7 +91,7 @@ private:
     std::thread serverThread_;
     
     // Component references
-    std::shared_ptr<SVPublisherManager> publisherManager_;
+    std::shared_ptr<SVPublisherManager> svManager_;
     std::shared_ptr<SequenceEngine> sequenceEngine_;
     std::shared_ptr<GooseSubscriber> gooseSubscriber_;
     std::shared_ptr<AnalyzerEngine> analyzerEngine_;

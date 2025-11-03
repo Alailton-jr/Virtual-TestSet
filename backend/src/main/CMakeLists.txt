@@ -12,6 +12,10 @@ target_link_libraries(${PROJECT_NAME}
     sampledValue
     tests
     sniffer
+    api
+    vts_core
+    vts_synth
+    Threads::Threads
 )
 
 target_include_directories( ${PROJECT_NAME}
