@@ -52,7 +52,7 @@ public:
         std::vector<uint8_t> encoded;
         encoded.reserve(4); // Pre-allocate 4 bytes
 
-        uint16_t tci = (static_cast<uint16_t>(priority) << 13) | (static_cast<uint16_t>(DEI) << 12) | ID;
+        uint16_t tci = static_cast<uint16_t>((static_cast<uint16_t>(priority) << 13) | (static_cast<uint16_t>(DEI) << 12) | ID);
 
         encoded.push_back(0x81);
         encoded.push_back(0x00);

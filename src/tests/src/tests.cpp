@@ -94,9 +94,7 @@ void from_json(const json& j, transient_config& cfg) {
     if (cfg.file_data_fs == 0) {
         throw std::invalid_argument("transient_config: file_data_fs must be > 0");
     }
-    if (cfg.scale <= 0.0) {
-        throw std::invalid_argument("transient_config: scale must be > 0");
-    }
+    // Note: scale is a vector, would need element-wise validation if needed
 }
 
 void from_json(const json& j, Goose_info& cfg) {
@@ -109,21 +107,11 @@ void from_json(const json& j, Goose_info& cfg) {
     j.at("mac_dst").get_to(cfg.mac_dst);
     j.at("input").get_to(cfg.input);
     
-    // MAC address format validation
-    if (cfg.mac_dst.length() != 17) {
-        throw std::invalid_argument("Goose_info: mac_dst must be 17 characters (XX:XX:XX:XX:XX:XX format)");
+    // MAC address validation - expecting vector of 6 bytes
+    if (cfg.mac_dst.size() != 6) {
+        throw std::invalid_argument("Goose_info: mac_dst must be 6 bytes");
     }
-    for (size_t i = 0; i < cfg.mac_dst.length(); ++i) {
-        if (i % 3 == 2) {
-            if (cfg.mac_dst[i] != ':') {
-                throw std::invalid_argument("Goose_info: mac_dst format invalid (expected ':' at position " + std::to_string(i) + ")");
-            }
-        } else {
-            if (!std::isxdigit(static_cast<unsigned char>(cfg.mac_dst[i]))) {
-                throw std::invalid_argument("Goose_info: mac_dst contains non-hex character at position " + std::to_string(i));
-            }
-        }
-    }
+    // Note: Further MAC address validation could be added here if needed
 }
 
 std::vector<Goose_info> get_goose_input_config(const std::string& config_path){
@@ -146,31 +134,67 @@ std::vector<Goose_info> get_goose_input_config(const std::string& config_path){
 }
 
 
-std::vector<transient_config> get_transient_test_config(const std::string& config_path) {
-    std::vector<transient_config> transient_configs;
+std::vector<std::unique_ptr<transient_config>> get_transient_test_config(const std::string& config_path) {
+    std::vector<std::unique_ptr<transient_config>> transient_configs;
     std::ifstream f(config_path);
     if (!f.is_open()) {
-        transient_config test_config;
-        test_config.error_msg = "Failed to open config file: " + config_path;
-        test_config.fileloaded = 0;
-        return {test_config};
+        auto test_config = std::make_unique<transient_config>();
+        test_config->error_msg = "Failed to open config file: " + config_path;
+        test_config->fileloaded = 0;
+        transient_configs.push_back(std::move(test_config));
+        return transient_configs;
     }
     try {
         json data = json::parse(f);
         const auto& test_configs = data.at("Test Config");
         for (const auto& test_entry : test_configs) {
             if (test_entry.at("test_type").get<std::string>() == "transient") {
-                transient_config cfg = test_entry.get<transient_config>();
-                cfg.fileName = "files/" + cfg.fileName;
-                cfg.fileloaded = 1;
-                transient_configs.push_back(cfg);
+                auto cfg = std::make_unique<transient_config>();
+                // Manually extract fields from JSON to avoid copying
+                cfg->fileName = "files/" + test_entry.at("fileName").get<std::string>();
+                cfg->loop_flag = test_entry.value("loop_flag", uint8_t(0));
+                cfg->interval_flag = test_entry.value("interval_flag", uint8_t(0));
+                cfg->interval = test_entry.value("interval", 0.0);
+                cfg->start_time = test_entry.value("start_time", uint64_t(0));
+                cfg->timed_start = test_entry.value("timed_start", uint32_t(0));
+                cfg->fileloaded = 1;
+                
+                // Extract channel config and scale if present
+                if (test_entry.contains("channelConfig")) {
+                    cfg->channelConfig = test_entry.at("channelConfig").get<std::vector<std::vector<uint8_t>>>();
+                }
+                if (test_entry.contains("scale")) {
+                    cfg->scale = test_entry.at("scale").get<std::vector<double>>();
+                }
+                cfg->file_data_fs = test_entry.value("file_data_fs", 0.0);
+                
+                // Extract SV config if present
+                if (test_entry.contains("sv_config")) {
+                    const auto& sv = test_entry.at("sv_config");
+                    cfg->sv_config.srcMac = sv.value("srcMac", "");
+                    cfg->sv_config.dstMac = sv.value("dstMac", "");
+                    cfg->sv_config.appID = sv.value("appID", uint16_t(0));
+                    cfg->sv_config.vlanId = sv.value("vlanId", uint16_t(0));
+                    cfg->sv_config.vlanPcp = static_cast<uint8_t>(sv.value("vlanPcp", uint16_t(0)));
+                    cfg->sv_config.vlanDei = static_cast<uint8_t>(sv.value("vlanDei", uint16_t(0)));
+                    cfg->sv_config.noAsdu = sv.value("noAsdu", uint8_t(0));
+                    cfg->sv_config.svID = sv.value("svID", "");
+                    cfg->sv_config.smpCnt = sv.value("smpCnt", uint16_t(0));
+                    cfg->sv_config.confRev = sv.value("confRev", uint32_t(0));
+                    cfg->sv_config.smpSynch = sv.value("smpSynch", uint8_t(0));
+                    cfg->sv_config.smpRate = sv.value("smpRate", uint16_t(0));
+                    cfg->sv_config.smpMod = sv.value("smpMod", uint16_t(0));
+                    cfg->sv_config.noChannels = sv.value("noChannels", uint16_t(0));
+                }
+                
+                transient_configs.push_back(std::move(cfg));
             }
         }
     } catch (const json::exception& e) {
-        transient_config error_cfg;
-        error_cfg.error_msg = "JSON error: " + std::string(e.what());
-        error_cfg.fileloaded = 0;
-        transient_configs.push_back(error_cfg);
+        auto error_cfg = std::make_unique<transient_config>();
+        error_cfg->error_msg = "JSON error: " + std::string(e.what());
+        error_cfg->fileloaded = 0;
+        transient_configs.push_back(std::move(error_cfg));
     }
     return transient_configs;
 }
@@ -185,7 +209,7 @@ Sv_packet get_sampledValue_pkt_info(SampledValue_Config& svConf){
     // 
     packetInfo.noAsdu = svConf.noAsdu;
     packetInfo.smpRate = svConf.smpRate;
-    packetInfo.noChannels = svConf.noChannels;
+    packetInfo.noChannels = static_cast<uint8_t>(svConf.noChannels);
 
     // Ethernet (static: source/dest MAC)
     Ethernet eth(svConf.srcMac, svConf.dstMac);
@@ -210,7 +234,7 @@ Sv_packet get_sampledValue_pkt_info(SampledValue_Config& svConf){
     );
 
     // Initial position of SampledValue block
-    int idx_SV_Start = packetInfo.base_pkt.size();
+    size_t idx_SV_Start = packetInfo.base_pkt.size();
 
     auto encoded_sv = sv.getEncoded(8);
     packetInfo.base_pkt.insert(packetInfo.base_pkt.end(), encoded_sv.begin(), encoded_sv.end());
@@ -220,11 +244,15 @@ Sv_packet get_sampledValue_pkt_info(SampledValue_Config& svConf){
     packetInfo.smpCnt_pos.reserve(svConf.noAsdu);
     
     for (int num=0; num<svConf.noAsdu; num++){
-        int data_pos = sv.getParamPos(num, "seqData") + idx_SV_Start;
-        int smpCont_pos = sv.getParamPos(num, "smpCnt") + idx_SV_Start;
-
-        packetInfo.data_pos.push_back(data_pos);
-        packetInfo.smpCnt_pos.push_back(smpCont_pos);
+        int data_pos = sv.getParamPos(num, "seqData");
+        int smpCont_pos = sv.getParamPos(num, "smpCnt");
+        
+        if (data_pos >= 0) {
+            packetInfo.data_pos.push_back(static_cast<uint32_t>(data_pos) + static_cast<uint32_t>(idx_SV_Start));
+        }
+        if (smpCont_pos >= 0) {
+            packetInfo.smpCnt_pos.push_back(static_cast<uint32_t>(smpCont_pos) + static_cast<uint32_t>(idx_SV_Start));
+        }
     }
 
     return packetInfo;

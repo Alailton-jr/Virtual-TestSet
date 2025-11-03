@@ -51,7 +51,7 @@ public:
      * @param priority Priority of threads (SCHED_FIFO).
     */
     ThreadPool(int32_t no_threads, int32_t no_task, int32_t priority) 
-        : stop(false), running(true), num_tasks(no_task), front(0), rear(-1), count(0) {
+        : stop(false), running(true), num_tasks(static_cast<size_t>(no_task)), front(0), rear(-1), count(0) {
         
         // Task Queue Initialization (BEFORE creating threads)
         taskQueue.resize(no_task);
@@ -131,12 +131,12 @@ private:
     }
 
     // Pop a task from the task queue
-    Task<FuncType> pop(bool& stop) {
+    Task<FuncType> pop(bool& stopFlag) {
         pthread_mutex_lock(&mutex);
-        while (count <= 0 && !stop) { // Wait for the queue to have tasks
+        while (count <= 0 && !stopFlag) { // Wait for the queue to have tasks
             pthread_cond_wait(&not_empty, &mutex);
         }
-        if (stop){ // If the thread pool is stopping, return an empty task
+        if (stopFlag){ // If the thread pool is stopping, return an empty task
             pthread_mutex_unlock(&mutex);
             return Task<FuncType>(nullptr, nullptr);
         }

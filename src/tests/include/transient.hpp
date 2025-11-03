@@ -4,9 +4,10 @@
 #include <vector>
 #include <inttypes.h>
 #include <atomic>
+#include <array>
 #include "sv_sender.hpp"
 #include <pthread.h>
-#include "raw_socket.hpp"
+#include "raw_socket_platform.hpp"
 #include <string>
 
 #include <nlohmann/json.hpp>
@@ -37,7 +38,7 @@ struct transient_config{
     SampledValue_Config sv_config;
 
     RawSocket* socket;
-    std::vector<std::atomic<uint8_t>>* digital_input;
+    std::array<std::atomic<uint8_t>, 16>* digital_input;
     
 
     std::atomic<bool> stop;

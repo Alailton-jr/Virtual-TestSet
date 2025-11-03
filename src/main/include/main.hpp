@@ -6,7 +6,7 @@
 
 #include "sniffer.hpp"
 #include "tests.hpp"
-#include "raw_socket.hpp"
+#include "raw_socket_platform.hpp"
 
 #include <thread>
 #include <atomic>

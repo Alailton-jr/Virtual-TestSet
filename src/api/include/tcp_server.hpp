@@ -22,8 +22,8 @@ class TCPServer {
         void run();
         void handleClient(int clientSocket);
     
-        int serverSocket;
         int port;
+        int serverSocket;
         std::atomic<bool> isRunning;
         std::vector<std::thread> clientThreads;
 };

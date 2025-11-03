@@ -31,7 +31,7 @@ struct transient_plan{
 
     double interval;
     std::atomic<bool>* stop;
-    std::vector<std::atomic<uint8_t>>* digital_input;
+    std::array<std::atomic<uint8_t>, 16>* digital_input;
 
     struct timespec real_time_started, real_time_ended;
     double time_started, time_ended;
@@ -80,7 +80,7 @@ std::vector<std::vector<int32_t>> getTransientData(transient_config* conf){
         return{};
     }
 
-    data = resample(data, conf->file_data_fs, conf->sv_config.smpRate);
+    data = resample(data, static_cast<float>(conf->file_data_fs), static_cast<float>(conf->sv_config.smpRate));
 
     std::vector<std::vector<int32_t>> res;
     res.resize(conf->sv_config.noChannels);
@@ -92,12 +92,12 @@ std::vector<std::vector<int32_t>> getTransientData(transient_config* conf){
         int n_data = pos[1];
 
         std::vector<int32_t> channel_data;
-        channel_data.reserve(data[n_data].size());  // Pre-allocate
+        channel_data.reserve(data[static_cast<size_t>(n_data)].size());  // Pre-allocate
         
-        for (size_t j = 0; j < data[n_data].size(); j++){
-            channel_data.push_back(static_cast<int32_t>(data[n_data][j] * conf->scale[n_channel]));
+        for (size_t j = 0; j < data[static_cast<size_t>(n_data)].size(); j++){
+            channel_data.push_back(static_cast<int32_t>(data[static_cast<size_t>(n_data)][j] * conf->scale[static_cast<size_t>(n_channel)]));
         }
-        res[n_channel] = std::move(channel_data);  // Move to avoid copy
+        res[static_cast<size_t>(n_channel)] = std::move(channel_data);  // Move to avoid copy
     }
 
     return res;
@@ -110,15 +110,18 @@ int updatePkt(std::vector<std::vector<int32_t>>* buffer, Sv_packet* pkt_info, in
 
         // Ensure smpCount is within 16-bit range
         uint16_t safe_smpCount = static_cast<uint16_t>(smpCount);
-        pkt_info->base_pkt[pkt_info->smpCnt_pos[num]] = (safe_smpCount >> 8) & 0xFF;
-        pkt_info->base_pkt[pkt_info->smpCnt_pos[num]+1] = safe_smpCount & 0xFF;
+        pkt_info->base_pkt[pkt_info->smpCnt_pos[static_cast<size_t>(num)]] = (safe_smpCount >> 8) & 0xFF;
+        pkt_info->base_pkt[pkt_info->smpCnt_pos[static_cast<size_t>(num)]+1] = safe_smpCount & 0xFF;
 
         for (int cn = 0; cn < pkt_info->noChannels; cn++){
-            if ((*buffer)[cn].empty()) continue;
-            pkt_info->base_pkt[pkt_info->data_pos[num]     + cn*8] = ((*buffer)[cn][idx] >> 24) & 0xFF;
-            pkt_info->base_pkt[pkt_info->data_pos[num] + 1 + cn*8] = ((*buffer)[cn][idx] >> 16) & 0xFF;
-            pkt_info->base_pkt[pkt_info->data_pos[num] + 2 + cn*8] = ((*buffer)[cn][idx] >> 8) & 0xFF;
-            pkt_info->base_pkt[pkt_info->data_pos[num] + 3 + cn*8] = ((*buffer)[cn][idx]) & 0xFF;
+            if ((*buffer)[static_cast<size_t>(cn)].empty()) continue;
+            size_t data_base = pkt_info->data_pos[static_cast<size_t>(num)];
+            size_t cn_offset = static_cast<size_t>(cn) * 8;
+            int32_t value = (*buffer)[static_cast<size_t>(cn)][static_cast<size_t>(idx)];
+            pkt_info->base_pkt[data_base + cn_offset] = static_cast<uint8_t>((value >> 24) & 0xFF);
+            pkt_info->base_pkt[data_base + cn_offset + 1] = static_cast<uint8_t>((value >> 16) & 0xFF);
+            pkt_info->base_pkt[data_base + cn_offset + 2] = static_cast<uint8_t>((value >> 8) & 0xFF);
+            pkt_info->base_pkt[data_base + cn_offset + 3] = static_cast<uint8_t>(value & 0xFF);
             restartbuffer = -cn;
         }
         idx = idx + 1;
@@ -128,7 +131,7 @@ int updatePkt(std::vector<std::vector<int32_t>>* buffer, Sv_packet* pkt_info, in
         if (smpCount >= pkt_info->smpRate){
             smpCount = 0;
         }
-        if (idx >= (*buffer)[-restartbuffer].size()){
+        if (restartbuffer < 0 && static_cast<size_t>(idx) >= (*buffer)[static_cast<size_t>(-restartbuffer)].size()){
             idx = 0;
             restartbuffer = 1;
         }
@@ -146,7 +149,7 @@ void simple_replay(transient_plan* plan){
     clock_gettime(CLOCK_MONOTONIC, &t_ini);
 
     if (!plan->timedStart){
-        if (t_ini.tv_nsec > 5e8){
+        if (t_ini.tv_nsec > static_cast<long>(5e8)){
             t_ini.tv_sec += 2;
         }else{
             t_ini.tv_sec += 1;
@@ -169,13 +172,20 @@ void simple_replay(transient_plan* plan){
     timer.wait_period(waitPeriod);
     clock_gettime(CLOCK_MONOTONIC, &t0);
     while ((!plan->stop->load(std::memory_order_acquire)) && ((*plan->digital_input)[0].load(std::memory_order_acquire) == 0)){
+#ifdef __linux__
         sizeSented = sendmsg(plan->socket->socket_id, &plan->socket->msg_hdr, 0);
+#else
+        // macOS: Raw sockets not supported, skip packet sending
+        sizeSented = 0;
+        (void)plan; // Suppress unused warning
+#endif
         if (sizeSented > 0) {
             METRIC_SENT_FRAME();
         }
         if (updatePkt(plan->buffer, plan->sv_info, buffer_idx, smpCount)){
             break;
         }
+        (void)nPkts; // Track packets sent (currently unused)
         nPkts++;
         timer.wait_period(waitPeriod);
     }
@@ -193,31 +203,37 @@ void loop_replay(transient_plan* plan){
     Timer timer;
     struct timespec t_ini, t_end, t0, t1;
 
-    long waitPeriod = (long)(1e9/plan->sv_info->smpRate);
+    long waitPeriod = static_cast<long>(1e9/plan->sv_info->smpRate);
 
     clock_gettime(CLOCK_REALTIME, &t_end);
     clock_gettime(CLOCK_MONOTONIC, &t_ini);
 
-    if (t_end.tv_nsec > 5e8){
+    if (t_end.tv_nsec > static_cast<long>(5e8)){
         t_ini.tv_sec += 2;
     }else{
         t_ini.tv_sec += 1;
     }
     t_ini.tv_nsec = (t_ini.tv_nsec - t_end.tv_nsec);
-    if (t_ini.tv_nsec < 0) t_ini.tv_nsec = 1e9 - t_ini.tv_nsec;
+    if (t_ini.tv_nsec < 0) t_ini.tv_nsec = static_cast<long>(1e9) - t_ini.tv_nsec;
 
     int buffer_idx = 0;
     int smpCount = 0;
     ssize_t sizeSented = 0;
 
     int n_stop = 0;
+    (void)n_stop; // Currently unused
 
     updatePkt(plan->buffer, plan->sv_info, buffer_idx, smpCount);
     timer.start_period(t_ini);
     timer.wait_period(waitPeriod);
     clock_gettime(CLOCK_MONOTONIC, &t0);
     while ((!plan->stop->load(std::memory_order_acquire)) && ((*plan->digital_input)[0].load(std::memory_order_acquire) == 0)){
+#ifdef __linux__
         sizeSented = sendmsg(plan->socket->socket_id, &plan->socket->msg_hdr, 0);
+#else
+        sizeSented = 0;
+        (void)plan;
+#endif
         if (sizeSented > 0) {
             METRIC_SENT_FRAME();
         }
@@ -232,7 +248,7 @@ void loop_replay(transient_plan* plan){
 }
 
 void interval_replay(transient_plan* plan){
-
+    (void)plan; // Not yet implemented
 }
 
 
@@ -246,11 +262,12 @@ transient_plan create_plan(transient_config* conf, std::vector<std::vector<int32
     plan.stop = &conf->stop;
     plan.sv_info = sv_info;
     plan.socket = socket;
+    // digital_input is already a pointer in transient_config, so just assign it
     plan.digital_input = conf->digital_input;
 
-    plan.timedStart = conf->timed_start;
-    plan.start_time.tv_sec = conf->start_time / 1e9;
-    plan.start_time.tv_nsec = conf->start_time - plan.start_time.tv_sec * 1e9;
+    plan.timedStart = static_cast<int32_t>(conf->timed_start);
+    plan.start_time.tv_sec = static_cast<__darwin_time_t>(conf->start_time / 1e9);
+    plan.start_time.tv_nsec = static_cast<long>(conf->start_time - static_cast<double>(plan.start_time.tv_sec) * 1e9);
 
     if (plan.loop_flag){
         plan._execute = &loop_replay;

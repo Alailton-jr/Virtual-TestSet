@@ -9,9 +9,10 @@
 #include "transient.hpp"
 #include "sniffer.hpp"
 #include <atomic>
+#include <array>
 
 std::vector<Goose_info> get_goose_input_config(const std::string& config_path);
-std::vector<transient_config> get_transient_test_config(const std::string& config_path);
+std::vector<std::unique_ptr<transient_config>> get_transient_test_config(const std::string& config_path);
 
 struct Sv_packet{
     std::vector<uint8_t> base_pkt;
@@ -24,8 +25,8 @@ struct Sv_packet{
 
 class Tests_Class{
 public:
-    std::vector<std::atomic<uint8_t>> digital_input;
-    std::vector<transient_config> transient_tests;
+    std::array<std::atomic<uint8_t>, 16> digital_input;
+    std::vector<std::unique_ptr<transient_config>> transient_tests;
     RawSocket raw_socket;
     SnifferClass sniffer;
 
@@ -36,7 +37,6 @@ private:
 public:
 
     Tests_Class(){
-        digital_input.resize(16);
         for(size_t i = 0; i < digital_input.size(); ++i) {
             digital_input[i].store(0, std::memory_order_relaxed);
         }
@@ -45,14 +45,14 @@ public:
 
     int32_t is_running(){
         for (auto& conf: transient_tests){
-            if (conf.running.load(std::memory_order_acquire)){
+            if (conf->running.load(std::memory_order_acquire)){
                 return 1;
             }
         }
         return 0;
     }
 
-    void start_transient_test(std::vector<transient_config> configs){
+    void start_transient_test(std::vector<std::unique_ptr<transient_config>>&& configs){
 
         if(sniffer.running.load(std::memory_order_acquire)){
             sniffer.stopThread();
@@ -65,32 +65,32 @@ public:
         transient_tests.clear();
 
         for (size_t i=0; i<configs.size(); i++){
-            transient_tests.push_back(configs[i]);
+            transient_tests.push_back(std::move(configs[i]));
         }
 
         for (auto& conf: transient_tests){
-            conf.socket = &this->raw_socket;
-            conf.digital_input = &this->digital_input;
-            int ret = pthread_create(&conf.thd, NULL, run_transient_test, static_cast<void*>(&conf));
+            conf->socket = &this->raw_socket;
+            conf->digital_input = &this->digital_input;
+            int ret = pthread_create(&conf->thd, NULL, run_transient_test, static_cast<void*>(conf.get()));
             if (ret != 0) {
                 throw std::runtime_error("Failed to create transient test thread: " + std::string(strerror(ret)));
             }
-            conf.threadStarted = true;
-            pthread_setschedparam(conf.thd, SCHED_FIFO, &param);
+            conf->threadStarted = true;
+            pthread_setschedparam(conf->thd, SCHED_FIFO, &param);
         }
     }
 
     void stop_transient_test(){
         for (auto& conf: transient_tests){
-            conf.stop.store(true, std::memory_order_release);
+            conf->stop.store(true, std::memory_order_release);
         }
     }
     
     void join_transient_tests(){
         for (auto& conf: transient_tests){
-            if (conf.threadStarted) {
-                pthread_join(conf.thd, NULL);
-                conf.threadStarted = false;
+            if (conf->threadStarted) {
+                pthread_join(conf->thd, NULL);
+                conf->threadStarted = false;
             }
         }
     }

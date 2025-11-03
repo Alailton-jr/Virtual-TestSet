@@ -7,9 +7,10 @@
 #include <cstdint>
 #include <cstring>
 #include <atomic>
+#include <array>
 
 #include "general_definition.hpp"
-#include "raw_socket.hpp"
+#include "raw_socket_platform.hpp"
 #include "thread_pool.hpp"
 
 #define WINDOW_STEP 0.2
@@ -34,7 +35,7 @@ public:
     bool threadStarted;
 
     RawSocket socket;
-    std::vector<std::atomic<uint8_t>>* digitalInput;
+    std::array<std::atomic<uint8_t>, 16>* digitalInput;
     std::vector<Goose_info> goInfo;
 
     SnifferClass() : running(false), stop(false), threadStarted(false) {
@@ -47,12 +48,12 @@ public:
     void init(){
     }
 
-    void startThread(std::vector<Goose_info> goInfo){
+    void startThread(std::vector<Goose_info> gooseInfo){
         if (threadStarted) {
             throw std::runtime_error("Sniffer thread already started");
         }
 
-        this->goInfo = goInfo;
+        this->goInfo = gooseInfo;
         this->noThreads = Sniffer_NoThreads;
         this->noTasks = Sniffer_NoTasks;
         this->priority = Sniffer_ThreadPriority;

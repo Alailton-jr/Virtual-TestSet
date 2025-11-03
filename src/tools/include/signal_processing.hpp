@@ -16,21 +16,21 @@ inline  std::vector<std::vector<double>> resample(std::vector<std::vector<double
     std::vector<std::vector<double>> data_resampled;
     data_resampled.reserve(data.size());  // Pre-allocate outer vector
 
-    float resample_ratio = new_fs / fs;
+    double resample_ratio = static_cast<double>(new_fs) / static_cast<double>(fs);
 
     for (const auto& signal : data) {
         std::vector<double> resampled_signal;
-        int new_length = static_cast<int>(std::round(signal.size() * resample_ratio));
+        size_t new_length = static_cast<size_t>(std::round(signal.size() * resample_ratio));
         resampled_signal.reserve(new_length);  // Pre-allocate inner vector
 
-        for (int i = 0; i < new_length; ++i) {
-            float original_index = i / resample_ratio;
+        for (size_t i = 0; i < new_length; ++i) {
+            double original_index = static_cast<double>(i) / resample_ratio;
 
-            int index_left = static_cast<int>(std::floor(original_index));
-            int index_right = std::min(index_left + 1, static_cast<int>(signal.size() - 1));
+            size_t index_left = static_cast<size_t>(std::floor(original_index));
+            size_t index_right = std::min(index_left + 1, signal.size() - 1);
 
-            float t = original_index - index_left;
-            double interpolated_value = (1 - t) * signal[index_left] + t * signal[index_right];
+            double t = original_index - static_cast<double>(index_left);
+            double interpolated_value = (1.0 - t) * signal[index_left] + t * signal[index_right];
 
             resampled_signal.push_back(interpolated_value);
         }

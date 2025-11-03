@@ -195,7 +195,7 @@ public:
             case Type::BitString:
                 if (!bitString.has_value()) break;
                 encoded.push_back(0x84);
-                encoded.push_back(bitString.value().size());
+                encoded.push_back(static_cast<uint8_t>(bitString.value().size()));
                 encoded.insert(encoded.end(), bitString.value().begin(), bitString.value().end());
                 break;
             case Type::Integer:
@@ -221,7 +221,7 @@ public:
                 encoded.push_back(0x87);
                 {
                     std::vector<uint8_t> fpEncoded = floatingPoint.value().getEncoded();
-                    encoded.push_back(fpEncoded.size());
+                    encoded.push_back(static_cast<uint8_t>(fpEncoded.size()));
                     encoded.insert(encoded.end(), fpEncoded.begin(), fpEncoded.end());
                 }
                 break;
@@ -239,13 +239,13 @@ public:
             case Type::OctetString:
                 if (!octetString.has_value()) break;
                 encoded.push_back(0x89);
-                encoded.push_back(octetString.value().size());
+                encoded.push_back(static_cast<uint8_t>(octetString.value().size()));
                 encoded.insert(encoded.end(), octetString.value().begin(), octetString.value().end());
                 break;
             case Type::VisibleString:
                 if (!visibleString.has_value()) break;
                 encoded.push_back(0x8A);
-                encoded.push_back(visibleString.value().size());
+                encoded.push_back(static_cast<uint8_t>(visibleString.value().size()));
                 encoded.insert(encoded.end(), visibleString.value().begin(), visibleString.value().end());
                 break;
             case Type::BinaryTime:
@@ -253,7 +253,7 @@ public:
                 encoded.push_back(0x8B);
                 {
                     std::vector<uint8_t> btEncoded = binaryTime.value().getEncoded();
-                    encoded.push_back(btEncoded.size());
+                    encoded.push_back(static_cast<uint8_t>(btEncoded.size()));
                     encoded.insert(encoded.end(), btEncoded.begin(), btEncoded.end());
                 }
                 break;
@@ -269,19 +269,19 @@ public:
             case Type::BooleanArray:
                 if (!booleanArray.has_value()) break;
                 encoded.push_back(0x8D);
-                encoded.push_back(booleanArray.value().size());
+                encoded.push_back(static_cast<uint8_t>(booleanArray.value().size()));
                 encoded.insert(encoded.end(), booleanArray.value().begin(), booleanArray.value().end());
                 break;
             case Type::ObjId:
                 if (!objId.has_value()) break;
                 encoded.push_back(0x8E);
-                encoded.push_back(objId.value().size());
+                encoded.push_back(static_cast<uint8_t>(objId.value().size()));
                 encoded.insert(encoded.end(), objId.value().begin(), objId.value().end());
                 break;
             case Type::MmsString:
                 if (!mmsString.has_value()) break;
                 encoded.push_back(0x8F);
-                encoded.push_back(mmsString.value().size());
+                encoded.push_back(static_cast<uint8_t>(mmsString.value().size()));
                 encoded.insert(encoded.end(), mmsString.value().begin(), mmsString.value().end());
                 break;
             case Type::UtcTime:
@@ -289,7 +289,7 @@ public:
                 encoded.push_back(0x90);
                 {
                     std::vector<uint8_t> utcEncoded = utcTime.value().getEncoded();
-                    encoded.push_back(utcEncoded.size());
+                    encoded.push_back(static_cast<uint8_t>(utcEncoded.size()));
                     encoded.insert(encoded.end(), utcEncoded.begin(), utcEncoded.end());
                 }
                 break;

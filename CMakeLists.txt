@@ -33,6 +33,13 @@ endif()
 
 # find_package(nlohmann_json 3.2.0 REQUIRED)
 
+# Find fftw3 library
+find_library(FFTW3_LIBRARY NAMES fftw3 PATHS /opt/homebrew/opt/fftw/lib /usr/local/lib /usr/lib)
+if(NOT FFTW3_LIBRARY)
+    message(FATAL_ERROR "fftw3 library not found. Please install it via: brew install fftw")
+endif()
+message(STATUS "Found fftw3 library: ${FFTW3_LIBRARY}")
+
 # Subdirectories
 add_subdirectory(src/platform)
 add_subdirectory(src/main)
@@ -48,6 +55,9 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/files
 
 # Enable testing
 enable_testing()
+
+# Phase 13: Add unit tests
+add_subdirectory(tests)
 
 # Placeholder test - binary runs with --help
 add_test(NAME basic_help_test

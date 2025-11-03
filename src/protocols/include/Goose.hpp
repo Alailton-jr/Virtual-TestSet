@@ -37,16 +37,21 @@ public:
 
     int offSet;
 
-    Goose(uint16_t appID, const std::string& gocbRef, int32_t timeAllowedtoLive,
-             const std::string& datSet, const UtcTime& t,
-             int32_t stNum, int32_t sqNum, int32_t confRev,
-             int32_t numDatSetEntries, const std::vector<Data>& allData)
-        : appID(appID), gocbRef(gocbRef), timeAllowedtoLive(timeAllowedtoLive), datSet(datSet),
-          t(t), stNum(stNum), sqNum(sqNum), confRev(confRev), allData(allData) {}
+        Goose(const std::string& /*srcMAC*/, const std::string& /*dstMAC*/, uint16_t appID,
+              uint16_t /*vlan_id*/, const std::string& gocbRef, uint32_t timeAllowedToLive,
+              const std::string& datSet, const std::string& /*goID*/, UtcTime t, uint32_t stNum,
+              uint32_t sqNum, bool /*test*/, uint32_t confRev, bool /*ndsCom*/, uint32_t /*numDatSetEntries*/,
+              const std::vector<Data>& allData)
+        : appID(appID), gocbRef(gocbRef), timeAllowedtoLive(static_cast<int32_t>(timeAllowedToLive)), datSet(datSet),
+          t(t), stNum(static_cast<int32_t>(stNum)), sqNum(static_cast<int32_t>(sqNum)), 
+          confRev(static_cast<int32_t>(confRev)), numDatSetEntries(0), allData(allData), offSet(0) {}
 
     int getParamPos(const std::string& param) const {
         auto it = indices.find(param);
-        return (it != indices.end()) ? (it->second + this->offSet) : -1;
+        if (it != indices.end()) {
+            return static_cast<int>(it->second + static_cast<size_t>(this->offSet));
+        }
+        return -1;
     }
 
     std::vector<uint8_t> getEncoded() {
@@ -55,11 +60,11 @@ public:
 
         std::vector<uint8_t> pduEncoded = this->getPduEncoded();
 
-        uint16_t pduSize = pduEncoded.size();
+        uint16_t pduSize = static_cast<uint16_t>(pduEncoded.size());
         uint16_t length = 8 + 2 + pduSize;
         offSet = 14;
 
-        numDatSetEntries = allData.size();
+    numDatSetEntries = static_cast<int32_t>(allData.size());
 
         if (pduSize > 0xff) {
             length += 2;
@@ -111,7 +116,7 @@ private:
         std::vector<uint8_t> _encoded;
         indices.clear(); 
 
-        this->numDatSetEntries = allData.size();
+    this->numDatSetEntries = static_cast<int32_t>(allData.size());
         
         // Guard against dataset overflow (32-bit signed integer max)
         if (this->numDatSetEntries > INT32_MAX) {

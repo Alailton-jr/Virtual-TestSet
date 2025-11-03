@@ -68,7 +68,7 @@ std::string sanitizeFileName(const std::string& name) {
 
 // Real 
 
-TCPServer::TCPServer(int port) : port(port), isRunning(false), serverSocket(-1) {}
+TCPServer::TCPServer(int port) : serverSocket(-1), port(port), isRunning(false) {}
 
 TCPServer::~TCPServer() {
     stop();
@@ -168,7 +168,7 @@ int32_t save_file(int* clientSocket, char* buffer, int maxBufferSize) {
     char fileName[256];
     memset(fileName, 0, sizeof(fileName));
     send(*clientSocket, "OK", 2, 0);
-    int bytesReceived = recv(*clientSocket, fileName, sizeof(fileName), 0);
+    ssize_t bytesReceived = recv(*clientSocket, fileName, sizeof(fileName), 0);
     if (bytesReceived <= 0) {
         return -1;
     }
@@ -188,7 +188,7 @@ int32_t save_file(int* clientSocket, char* buffer, int maxBufferSize) {
     }
     
     // Fix: use maxBufferSize instead of sizeof(buffer) which is pointer size
-    int bytesReceivedFileSize = recv(*clientSocket, buffer, maxBufferSize, 0);
+    ssize_t bytesReceivedFileSize = recv(*clientSocket, buffer, static_cast<size_t>(maxBufferSize), 0);
     if (bytesReceivedFileSize <= 0) {
         return -1;
     }
@@ -197,7 +197,7 @@ int32_t save_file(int* clientSocket, char* buffer, int maxBufferSize) {
     // Fix: use stoi with error handling instead of atoi
     int fileSize;
     try {
-        fileSize = std::stoi(std::string(buffer, bytesReceivedFileSize));
+        fileSize = std::stoi(std::string(buffer, static_cast<size_t>(bytesReceivedFileSize)));
         if (fileSize <= 0 || fileSize > 100*1024*1024) { // 100 MB limit
             throw std::out_of_range("File size out of range");
         }
@@ -212,14 +212,14 @@ int32_t save_file(int* clientSocket, char* buffer, int maxBufferSize) {
     if (file.is_open()) {
         int totalBytesReceived = 0;
         while (totalBytesReceived < fileSize) {
-            int bytesReceived = recv(*clientSocket, buffer, maxBufferSize, 0);
-            if (bytesReceived <= 0) {
+            ssize_t bytesReceivedChunk = recv(*clientSocket, buffer, static_cast<size_t>(maxBufferSize), 0);
+            if (bytesReceivedChunk <= 0) {
                 LOG_ERROR("FILE", "Error receiving file data");
                 file.close();
                 return -1;
             }
-            file.write(buffer, bytesReceived);
-            totalBytesReceived += bytesReceived;
+            file.write(buffer, bytesReceivedChunk);
+            totalBytesReceived += static_cast<int>(bytesReceivedChunk);
             send(*clientSocket, "OK", 2, 0);
         }
         file.close();
@@ -234,7 +234,7 @@ int32_t save_file(int* clientSocket, char* buffer, int maxBufferSize) {
 
 int save_goose_input_configFile(int* clientSocket, char* buffer, int maxBufferSize) {
     send(*clientSocket, "OK", 2, 0);
-    int bytesReceivedFileSize = recv(*clientSocket, buffer, sizeof(buffer), 0);
+    ssize_t bytesReceivedFileSize = recv(*clientSocket, buffer, sizeof(buffer), 0);
     if (bytesReceivedFileSize <= 0) {
         return -1;
     }
@@ -245,7 +245,7 @@ int save_goose_input_configFile(int* clientSocket, char* buffer, int maxBufferSi
     if (file.is_open()) {
         int totalBytesReceived = 0;
         while (totalBytesReceived < fileSize) {
-            int bytesReceived = recv(*clientSocket, buffer, maxBufferSize, 0);
+            ssize_t bytesReceived = recv(*clientSocket, buffer, static_cast<size_t>(maxBufferSize), 0);
             if (bytesReceived <= 0) {
                 LOG_ERROR("FILE", "Error receiving file data");
                 file.close();
@@ -280,7 +280,7 @@ int save_goose_input_configFile(int* clientSocket, char* buffer, int maxBufferSi
 
 int save_transient_test_configFile(int* clientSocket, char* buffer, int maxBufferSize) {
     send(*clientSocket, "OK", 2, 0);
-    int bytesReceivedFileSize = recv(*clientSocket, buffer, sizeof(buffer), 0);
+    ssize_t bytesReceivedFileSize = recv(*clientSocket, buffer, sizeof(buffer), 0);
     if (bytesReceivedFileSize <= 0) {
         return -1;
     }
@@ -291,7 +291,7 @@ int save_transient_test_configFile(int* clientSocket, char* buffer, int maxBuffe
     if (file.is_open()) {
         int totalBytesReceived = 0;
         while (totalBytesReceived < fileSize) {
-            int bytesReceived = recv(*clientSocket, buffer, maxBufferSize, 0);
+            ssize_t bytesReceived = recv(*clientSocket, buffer, static_cast<size_t>(maxBufferSize), 0);
             if (bytesReceived <= 0) {
                 std::cerr << "Error receiving file data.\n";
                 file.close();
@@ -313,14 +313,14 @@ int save_transient_test_configFile(int* clientSocket, char* buffer, int maxBuffe
 // Start the transient test
 std::string start_transient_test(Tests_Class *testSet) {
     try{
-        std::vector<transient_config> conf = get_transient_test_config("files/transient_test.json");
+        std::vector<std::unique_ptr<transient_config>> conf = get_transient_test_config("files/transient_test.json");
         for (auto& c: conf){
-            if (c.fileloaded == 0){
-                std::cerr << c.error_msg << std::endl;
-                return c.error_msg;
+            if (c->fileloaded == 0){
+                std::cerr << c->error_msg << std::endl;
+                return c->error_msg;
             }
         }
-        testSet->start_transient_test(conf);
+        testSet->start_transient_test(std::move(conf));
         std::cout << "Transient test started" << std::endl;
         return "0";
     } catch (const std::exception& e) {
@@ -347,15 +347,16 @@ std::string get_transient_test_results(Tests_Class *testSet) {
             return "No transient test running";
         }
         std::string results;
-        for (int i = 0; i < testSet->transient_tests.size(); i++){
+        for (size_t i = 0; i < testSet->transient_tests.size(); i++){
+            auto& test = testSet->transient_tests[i];
             results += "Test " + std::to_string(i) + ": ";
-            results += "File loaded: " + std::to_string(testSet->transient_tests[i].fileloaded) + "\n";
-            results += "Running: " + std::to_string(testSet->transient_tests[i].running) + "\n";
-            results += "Time started sec: " + std::to_string(testSet->transient_tests[i].time_started.tv_sec) + "\n";
-            results += "Time started nsec: " + std::to_string(testSet->transient_tests[i].time_started.tv_nsec) + "\n";
-            results += "Time ended sec: " + std::to_string(testSet->transient_tests[i].time_ended.tv_sec) + "\n";
-            results += "Time ended nsec: " + std::to_string(testSet->transient_tests[i].time_ended.tv_nsec) + "\n";
-            results += "Trip time: " + std::to_string(testSet->transient_tests[i].trip_time) + "\n";
+            results += "File loaded: " + std::to_string(test->fileloaded) + "\n";
+            results += "Running: " + std::to_string(test->running.load(std::memory_order_acquire)) + "\n";
+            results += "Time started sec: " + std::to_string(test->time_started.tv_sec) + "\n";
+            results += "Time started nsec: " + std::to_string(test->time_started.tv_nsec) + "\n";
+            results += "Time ended sec: " + std::to_string(test->time_ended.tv_sec) + "\n";
+            results += "Time ended nsec: " + std::to_string(test->time_ended.tv_nsec) + "\n";
+            results += "Trip time: " + std::to_string(test->trip_time) + "\n";
         }
         return results;
     } catch (const std::exception& e) {
@@ -384,14 +385,14 @@ void TCPServer::handleClient(int clientSocket) {
     // For simplicity, we assume the command is sent as a single message.
     // For file transfers, you might need a loop that reads the command and then the file contents.
     memset(buffer, 0, sizeof(buffer));
-    int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+    ssize_t bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
     if (bytesReceived <= 0) {
         close(clientSocket);
         return;
     }
     
     // Parse command; assume tokens are separated by a space
-    std::istringstream iss(std::string(buffer, bytesReceived));
+    std::istringstream iss(std::string(buffer, static_cast<size_t>(bytesReceived)));
     std::string command;
     iss >> command;
 
@@ -472,7 +473,7 @@ void test_sampledValue_Pkt(){
     base_pkt.insert(base_pkt.end(), encoded_eth.begin(), encoded_eth.end());
 
     // Virtual LAN
-    Virtual_LAN vlan(sv_conf->vlanId, sv_conf->vlanPcp, sv_conf->vlanDei);
+    Virtual_LAN vlan(static_cast<uint8_t>(sv_conf->vlanId), static_cast<uint8_t>(sv_conf->vlanPcp), static_cast<uint8_t>(sv_conf->vlanDei));
     auto encoded_vlan = vlan.getEncoded();
     base_pkt.insert(base_pkt.end(), encoded_vlan.begin(), encoded_vlan.end());
 
@@ -488,7 +489,7 @@ void test_sampledValue_Pkt(){
     );
 
     auto encoded_sv = sv.getEncoded(8);
-    int idx_SV_Start = base_pkt.size();
+    size_t idx_SV_Start = base_pkt.size();
     base_pkt.insert(base_pkt.end(), encoded_sv.begin(), encoded_sv.end());
 
     // Send the packet
@@ -497,13 +498,20 @@ void test_sampledValue_Pkt(){
     raw_socket.iov.iov_base = (void*)base_pkt.data();
     raw_socket.iov.iov_len = base_pkt.size();
 
-    int smpCount = sv.getParamPos(1, "smpCnt") + idx_SV_Start;
-    base_pkt[smpCount] = 0x00;
-    base_pkt[smpCount + 1] = 0x4;
+    int smpCountPos = sv.getParamPos(1, "smpCnt");
+    if (smpCountPos >= 0) {
+        size_t smpCountIdx = static_cast<size_t>(smpCountPos) + idx_SV_Start;
+        base_pkt[smpCountIdx] = 0x00;
+        base_pkt[smpCountIdx + 1] = 0x4;
+    }
 
+#ifdef __linux__
     for (int i = 0; i < 100; i++){
         sendmsg(raw_socket.socket_id, &raw_socket.msg_hdr, 0);
     }
+#else
+    (void)raw_socket; // Suppress unused warning on macOS
+#endif
 
 }
 
@@ -514,45 +522,47 @@ void test_Sniffer(){
     
     Tests_Class testSet;
 
-    // Transient
-    transient_config tran_conf;
+    // Transient - Create unique_ptr and configure
+    auto tran_conf = std::make_unique<transient_config>();
 
-    tran_conf.channelConfig = {
+    tran_conf->channelConfig = {
         // {0,1}, {1,2}, {2,3}, {4,4}, {5,5}, {6,6}
         {0,6}, {1,5}, {2,4}, {4,3}, {5,2}, {6,1}
     };
-    tran_conf.file_data_fs = 9600;
-    // tran_conf.fileName = "files/noFault.csv";
-    tran_conf.fileName = "files/Fault_main.csv";
-    tran_conf.interval = 0;
-    tran_conf.interval_flag = 0;
-    tran_conf.loop_flag = 0;
-    tran_conf.scale = {1,1,1,1,1,1,1,1}; 
+    tran_conf->file_data_fs = 9600;
+    // tran_conf->fileName = "files/noFault.csv";
+    tran_conf->fileName = "files/Fault_main.csv";
+    tran_conf->interval = 0;
+    tran_conf->interval_flag = 0;
+    tran_conf->loop_flag = 0;
+    tran_conf->scale = {1,1,1,1,1,1,1,1}; 
 
     //SV Config 
-    tran_conf.sv_config.appID = 0x4000;
-    tran_conf.sv_config.confRev = 1;
-    tran_conf.sv_config.dstMac = "01-0C-CD-04-00-01";
-    tran_conf.sv_config.noAsdu = 1;
-    tran_conf.sv_config.smpCnt = 0;
-    tran_conf.sv_config.smpMod = 0;
-    tran_conf.sv_config.smpRate = 4800;
-    tran_conf.sv_config.smpSynch = 1;
-    tran_conf.sv_config.svID = "SV_01";
-    tran_conf.sv_config.vlanDei = 0;
-    tran_conf.sv_config.vlanId = 100;
-    tran_conf.sv_config.vlanPcp = 4;
-    tran_conf.sv_config.noChannels = 8;
+    tran_conf->sv_config.appID = 0x4000;
+    tran_conf->sv_config.confRev = 1;
+    tran_conf->sv_config.dstMac = "01-0C-CD-04-00-01";
+    tran_conf->sv_config.noAsdu = 1;
+    tran_conf->sv_config.smpCnt = 0;
+    tran_conf->sv_config.smpMod = 0;
+    tran_conf->sv_config.smpRate = 4800;
+    tran_conf->sv_config.smpSynch = 1;
+    tran_conf->sv_config.svID = "SV_01";
+    tran_conf->sv_config.vlanDei = 0;
+    tran_conf->sv_config.vlanId = 100;
+    tran_conf->sv_config.vlanPcp = 4;
+    tran_conf->sv_config.noChannels = 8;
 
     std::vector<int> angs = {90};//{0, 45, 90}
     std::vector<int> ress = {30};//{0, 15, 30, 50};
     double *trip_time;
-    trip_time = &tran_conf.trip_time;
+    trip_time = &tran_conf->trip_time;
 
-    tran_conf.fileName = "files/Fault_main_0_0.csv";
-    testSet.start_transient_test({tran_conf});
+    tran_conf->fileName = "files/Fault_main_0_0.csv";
+    std::vector<std::unique_ptr<transient_config>> configs;
+    configs.push_back(std::move(tran_conf));
+    testSet.start_transient_test(std::move(configs));
     sleep(1);
-    while(testSet.transient_tests[0].running == 1){
+    while(testSet.transient_tests[0]->running.load() == 1){
         sleep(1);
     }
 
@@ -586,12 +596,26 @@ void test_Sniffer(){
                 std::string fileName = protName + "_ang_" + std::to_string(ang)+ "_res_" + std::to_string(res) + ".txt";
                 std::ofstream file = std::ofstream(fileName, std::ios::app);
 
-                testSet.sniffer.startThread({goInfo});
+                std::vector<Goose_info> gooseInfos;
+                gooseInfos.push_back(goInfo);
+                testSet.sniffer.startThread(gooseInfos);
                 for (int i=0;i<50;i++){
-                    tran_conf.fileName = "files/Fault_main_" + std::to_string(ang) + "_" + std::to_string(res) + ".csv";
-                    testSet.start_transient_test({tran_conf});
+                    // Create a new config for each iteration (can't copy due to atomics)
+                    auto test_conf = std::make_unique<transient_config>();
+                    test_conf->channelConfig = tran_conf->channelConfig;
+                    test_conf->file_data_fs = tran_conf->file_data_fs;
+                    test_conf->fileName = "files/Fault_main_" + std::to_string(ang) + "_" + std::to_string(res) + ".csv";
+                    test_conf->interval = tran_conf->interval;
+                    test_conf->interval_flag = tran_conf->interval_flag;
+                    test_conf->loop_flag = tran_conf->loop_flag;
+                    test_conf->scale = tran_conf->scale;
+                    test_conf->sv_config = tran_conf->sv_config;
+                    
+                    std::vector<std::unique_ptr<transient_config>> testConfigs;
+                    testConfigs.push_back(std::move(test_conf));
+                    testSet.start_transient_test(std::move(testConfigs));
                     sleep(1);
-                    while(testSet.transient_tests[0].running == 1){
+                    while(testSet.transient_tests[0]->running.load() == 1){
                         sleep(1);
                     }
                     std::cout<< *trip_time << std::endl;
@@ -630,21 +654,21 @@ void test_defined_time(){
     clock_gettime(CLOCK_REALTIME, &t_now);
     std::cout << "Current time in nanoseconds: " << t_now.tv_sec * 1e9 + t_now.tv_nsec << std::endl;
     
-    std::vector<transient_config> conf = get_transient_test_config("files/transient_test.json");
+    std::vector<std::unique_ptr<transient_config>> conf = get_transient_test_config("files/transient_test.json");
     for (auto& c: conf){
-        if (c.fileloaded == 0){
-            std::cerr << c.error_msg << std::endl;
+        if (c->fileloaded == 0){
+            std::cerr << c->error_msg << std::endl;
             return;
         }
     }
-    testSet.start_transient_test(conf);
+    testSet.start_transient_test(std::move(conf));
 
     sleep(1);
-    while(testSet.transient_tests[0].running == 1){
+    while(testSet.transient_tests[0]->running.load() == 1){
         sleep(1);
     }
     std::cout << "Test finished" << std::endl;
-    std::cout << "Trip time: " << conf[0].trip_time << std::endl;
+    std::cout << "Trip time: " << testSet.transient_tests[0]->trip_time << std::endl;
     std::cout << "Test finished" << std::endl;
 
 }
@@ -777,7 +801,7 @@ int main(int argc, char* argv[]){
     
     LOG_INFO("MAIN", "==================================================");
     LOG_INFO("MAIN", "Virtual TestSet - IEC 61850 GOOSE/SV Test System");
-    LOG_INFO("MAIN", "Platform: %s", vts::platform::get_platform_info().c_str());
+    LOG_INFO("MAIN", "Platform: %s", vts::platform::get_platform_info());
     LOG_INFO("MAIN", "==================================================");
 
     // Phase 7: Real-time initialization (Linux only)

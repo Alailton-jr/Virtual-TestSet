@@ -9,10 +9,16 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <net/ethernet.h>
+#ifdef __linux__
 #include <linux/if_packet.h>
+#endif
 #include <linux/filter.h>
+#ifdef __linux__
 #include <linux/net_tstamp.h>
+#endif
+#ifdef __linux__
 #include <linux/sockios.h>
+#endif
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <poll.h>

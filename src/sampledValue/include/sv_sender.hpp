@@ -5,7 +5,7 @@
 #include <vector>
 #include <string>
 #include <inttypes.h>
-#include "raw_socket.hpp"
+#include "raw_socket_platform.hpp"
 #include "general_definition.hpp"
 
 class SampledValue_Config{

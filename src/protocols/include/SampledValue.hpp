@@ -37,18 +37,23 @@ public:
     int asduSize;
 
     SampledValue(uint16_t appID, uint8_t noAsdu, const std::string &svID, uint16_t smpCnt, uint32_t confRev, uint8_t smpSynch, uint16_t smpMod)
-        : appID(appID), noAsdu(noAsdu), svID(svID), smpCnt(smpCnt), confRev(confRev), smpSynch(smpSynch), smpMod(smpMod) {
+        : appID(appID), noAsdu(noAsdu), svID(svID), smpCnt(smpCnt), confRev(confRev), smpSynch(smpSynch), smpMod(smpMod), offSet(0), asduSize(0) {
         
         this->indices.resize(noAsdu);
     }
 
-    int getParamPos(int noAsdu, const std::string& param) const {
-        // Bounds check: validate noAsdu is within valid range
-        if (noAsdu < 0 || static_cast<size_t>(noAsdu) >= indices.size()) {
+    int getParamPos(int asduIndex, const std::string& param) const {
+        // Bounds check: validate asduIndex is within valid range
+        if (asduIndex < 0 || static_cast<size_t>(asduIndex) >= indices.size()) {
             return -1;  // Return error value for out-of-bounds access
         }
-        auto it = indices[noAsdu].find(param);
-        return (it != indices[noAsdu].end()) ? (it->second + this->offSet + noAsdu*this->asduSize) : -1;
+        auto it = indices[static_cast<size_t>(asduIndex)].find(param);
+        if (it != indices[static_cast<size_t>(asduIndex)].end()) {
+            size_t offset = it->second + static_cast<size_t>(this->offSet) + 
+                           static_cast<size_t>(asduIndex) * static_cast<size_t>(this->asduSize);
+            return static_cast<int>(offset);
+        }
+        return -1;
     }
 
     std::vector<uint8_t> getEncoded(uint8_t noChannel) {
@@ -58,7 +63,7 @@ public:
 
         std::vector<uint8_t> savPduEncoded = this->getSavPduEncoded(noChannel);
 
-        uint16_t savPduSize = savPduEncoded.size();
+        uint16_t savPduSize = static_cast<uint16_t>(savPduEncoded.size());
         uint16_t length = 8 + 2 + savPduSize;
         this->offSet = 9;
 
@@ -111,32 +116,31 @@ public:
 private:
 
     std::vector<uint8_t> getAsduEncoded(uint8_t noChannel, int asdu) {
-
         std::vector<uint8_t> _encoded;
 
         // svID
-        indices[asdu]["svID"] = _encoded.size();
+        indices[static_cast<size_t>(asdu)]["svID"] = _encoded.size();
         _encoded.push_back(0x80); // Tag [0] VisibleString
-        _encoded.push_back(svID.size());
+        _encoded.push_back(static_cast<uint8_t>(svID.size()));
         _encoded.insert(_encoded.end(), svID.begin(), svID.end());
 
         // datSet
         if (!datSet.empty()) {
-            indices[asdu]["datSet"] = _encoded.size();
+            indices[static_cast<size_t>(asdu)]["datSet"] = _encoded.size();
             _encoded.push_back(0x81); // Tag [1] VisibleString
-            _encoded.push_back(datSet.size());
+            _encoded.push_back(static_cast<uint8_t>(datSet.size()));
             _encoded.insert(_encoded.end(), datSet.begin(), datSet.end());
         }
 
         // smpCnt
-        indices[asdu]["smpCnt"] = _encoded.size();
+        indices[static_cast<size_t>(asdu)]["smpCnt"] = _encoded.size();
         _encoded.push_back(0x82); // Tag [2] INTEGER
         _encoded.push_back(2);
         _encoded.push_back((smpCnt >> 8) & 0xFF);
         _encoded.push_back(smpCnt & 0xFF);
 
         // confRev
-        indices[asdu]["confRev"] = _encoded.size();
+        indices[static_cast<size_t>(asdu)]["confRev"] = _encoded.size();
         _encoded.push_back(0x83); // Tag [3] INTEGER
         _encoded.push_back(4);
         _encoded.push_back((confRev >> 24) & 0xFF);
@@ -146,22 +150,22 @@ private:
 
         // refrTm
         if (refrTm.defined) {
-            indices[asdu]["refrTm"] = _encoded.size();
+            indices[static_cast<size_t>(asdu)]["refrTm"] = _encoded.size();
             _encoded.push_back(0x84); // Tag [4] UtcTime
             auto refrTmEncoded = refrTm.getEncoded();
-            _encoded.push_back(refrTmEncoded.size());
+            _encoded.push_back(static_cast<uint8_t>(refrTmEncoded.size()));
             _encoded.insert(_encoded.end(), refrTmEncoded.begin(), refrTmEncoded.end());
         }
 
         // smpSynch
-        indices[asdu]["smpSynch"] = _encoded.size();
+        indices[static_cast<size_t>(asdu)]["smpSynch"] = _encoded.size();
         _encoded.push_back(0x85); // Tag [5] BOOLEAN
         _encoded.push_back(1);
         _encoded.push_back(smpSynch);
 
         // smpRate
         if (smpRate) {
-            indices[asdu]["smpRate"] = _encoded.size();
+            indices[static_cast<size_t>(asdu)]["smpRate"] = _encoded.size();
             _encoded.push_back(0x86); // Tag [6] INTEGER
             _encoded.push_back(2);
             _encoded.push_back((smpRate >> 8) & 0xFF);
@@ -169,7 +173,7 @@ private:
         }
 
         // seqData
-        indices[asdu]["seqData"] = _encoded.size();
+        indices[static_cast<size_t>(asdu)]["seqData"] = _encoded.size();
         _encoded.push_back(0x87); // Tag [7] SEQUENCE OF Data
         _encoded.push_back(noChannel*8);
         for (int channel =0;channel<noChannel;channel++){
@@ -182,7 +186,7 @@ private:
 
         // smpMod
         if (smpMod) {
-            indices[asdu]["smpMod"] = _encoded.size();
+            indices[static_cast<size_t>(asdu)]["smpMod"] = _encoded.size();
             _encoded.push_back(0x88); // Tag [8] INTEGER
             _encoded.push_back(2);
             _encoded.push_back((smpMod >> 8) & 0xFF);
@@ -196,27 +200,25 @@ private:
         std::vector<uint8_t> _encoded;
 
         for (int asdu = 0; asdu < this->noAsdu; asdu++){
-            
             std::vector<uint8_t> asduEncoded = this->getAsduEncoded(noChannel, asdu);
-            uint32_t asduSize = asduEncoded.size();
+            uint32_t asduSizeLocal = static_cast<uint32_t>(asduEncoded.size());
 
             _encoded.push_back(0x30); // Tag [0] SEQUENCE OF ASDU
-            if (asduSize > 0xff) {
+            if (asduSizeLocal > 0xff) {
                 _encoded.push_back(0x82);
-                _encoded.push_back((asduSize >> 8) & 0xFF);
-                _encoded.push_back(asduSize & 0xFF);
-            } else if (asduSize > 0x80) {
+                _encoded.push_back((asduSizeLocal >> 8) & 0xFF);
+                _encoded.push_back(asduSizeLocal & 0xFF);
+            } else if (asduSizeLocal > 0x80) {
                 _encoded.push_back(0x81);
-                _encoded.push_back(asduSize & 0xFF);
+                _encoded.push_back(asduSizeLocal & 0xFF);
             } else {
-                _encoded.push_back(asduSize & 0xFF);
+                _encoded.push_back(asduSizeLocal & 0xFF);
             }
             _encoded.insert(_encoded.end(), asduEncoded.begin(), asduEncoded.end());
 
             if (asdu == 0){
-                this->asduSize = _encoded.size();
+                this->asduSize = static_cast<int>(_encoded.size());
             }
-
         }
 
         return _encoded;
@@ -228,7 +230,7 @@ private:
 
         // SEQ ASDU
         std::vector<uint8_t> seqAsduEncoded = this->getSeqAsduEncoded(noChannel);
-        uint32_t seqAsduSize = seqAsduEncoded.size();
+    uint32_t seqAsduSize = static_cast<uint32_t>(seqAsduEncoded.size());
 
         // noAsdu
         _encoded.push_back(0x80); // Tag [0] INTEGER

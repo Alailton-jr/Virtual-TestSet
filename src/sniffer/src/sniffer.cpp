@@ -7,26 +7,37 @@
 
 #include <chrono>
 #include <vector>
-#include <numeric>
+#ifdef REMOVE_UNUSED_INCLUDE_NUMERIC
+#endif
 #include <thread>
 
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <net/ethernet.h>
-#include <linux/if_packet.h> 
+#ifdef __linux__
+#include <linux/if_packet.h>
+#endif
+#ifdef __linux__
 #include <linux/net_tstamp.h>
+#endif
 #include <net/if.h>
 #include <ifaddrs.h>          
 #include <arpa/inet.h>        
+#ifdef __linux__
 #include <linux/sockios.h>
+#endif
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+#ifdef __linux__
 #include <fftw3.h>
+#endif
 #include <math.h>
 
-#include <fstream>
-#include <sstream>
+#ifdef REMOVE_UNUSED_INCLUDE_FSTREAM
+#endif
+#ifdef REMOVE_UNUSED_INCLUDE_SSTREAM
+#endif
 
 // Globals removed - moved into SnifferThread as local variables
 // std::vector<std::vector<uint8_t>> registeredMACs;
@@ -160,7 +171,7 @@ void process_GOOSE_packet(uint8_t* frame, ssize_t frameSize, int i, SnifferClass
         j += tlv_len + 2;
     }
     
-    for (const auto& dat : sniffer->goInfo[goIdx].input){
+    for (const auto& dat : sniffer->goInfo[static_cast<size_t>(goIdx)].input){
         if (dat[0] >= boolDat.size()){
             LOG_ERROR("GOOSE", "Data index out of range (dat[0]=%u, boolDat.size=%zu)", 
                       dat[0], boolDat.size());
@@ -207,7 +218,7 @@ void process_pkt(task_arg* arg) {
     if (!mac_found) return;
 
     // uint16_t smpCount;
-    int j = 0;
+    // int j = 0; // unused variable removed
     int i = (frame[12] == 0x81 && frame[13] == 0x00) ? 16 : 12; // Skip Ethernet and vLAN
 
     if ((frame[i] == 0x88 && frame[i+1] == 0xba)){ // Check if packet is SV
@@ -243,8 +254,9 @@ void* SnifferThread(void* arg){
         registeredMACs.push_back(mac.mac_dst);
     }
 
+
+#ifdef __linux__
     RawSocket* raw_socket = &sniffer_conf->socket;
-    
     // Add SO_RCVTIMEO for responsive stop (100ms timeout per spec)
     struct timeval timeout;
     timeout.tv_sec  = 0;
@@ -252,20 +264,14 @@ void* SnifferThread(void* arg){
     if (setsockopt(raw_socket->socket_id, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1) {
         LOG_WARN("SNIFFER", "Failed to set SO_RCVTIMEO: %s", strerror(errno));
     }
-    
-    // ThreadPool<void(task_arg*)> pool(sniffer_conf->noThreads, sniffer_conf->noTasks, sniffer_conf->priority);
-    // Variables used for decoding and the Thread Pool 
     uint8_t args_buff[Sniffer_NoTasks+1][Sniffer_RxSize];
     ssize_t rx_bytes;
     raw_socket->iov.iov_len = Sniffer_RxSize;
-
     int32_t idx_task = 0;
     task_arg task;
     while (!sniffer_conf->stop.load(std::memory_order_acquire)) {
-
         raw_socket->msg_hdr.msg_iov->iov_base = args_buff[idx_task];
         rx_bytes = recvmsg(raw_socket->socket_id, &raw_socket->msg_hdr, 0);
-
         if (rx_bytes < 0) {
             // Check for timeout - this allows responsive stop
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -274,40 +280,24 @@ void* SnifferThread(void* arg){
             LOG_ERROR("SNIFFER", "Failed to receive message: %s", strerror(errno));
             continue;
         }
-        
         if (rx_bytes > Sniffer_RxSize) {
             LOG_ERROR("SNIFFER", "Received message too large (rxBytes=%zd, maxSize=%d)", rx_bytes, Sniffer_RxSize);
             continue;
         }
-  
         task.pkt = args_buff[idx_task];
         task.pkt_len = rx_bytes;
         task.sniffer = sniffer_conf;
         task.registeredMACs = &registeredMACs;
         process_pkt(&task);
-
-
-        // if (memcmp(args_buff[idx_task], sniffer_conf->sv_info.mac_dst, 6) != 0){
-        //     continue; // Check if packet is for this IED
-        // }
-            
-        // Submit task to thread pool
-        // pool.submit(
-        //     process_pkt,
-        //     std::shared_ptr<task_arg*> (
-        //         new task_arg*(new task_arg{
-        //             .pkt = args_buff[idx_task],
-        //             .pkt_len = rx_bytes,
-        //             .info = sniffer_conf->sv_info 
-        //         }), 
-        //         [](task_arg** p) { delete *p; delete p;}
-        //     )
-        // );
-
         ++idx_task;
-
         if (idx_task > Sniffer_NoTasks)  idx_task = 0;
     }
+#else
+    LOG_WARN("SNIFFER", "Raw socket packet capture is not supported on this platform. Sniffer thread will idle.");
+    while (!sniffer_conf->stop.load(std::memory_order_acquire)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+#endif
 
 
     sniffer_conf->running.store(false, std::memory_order_release);

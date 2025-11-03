@@ -18,4 +18,6 @@ target_include_directories( ${PROJECT_NAME}
     PUBLIC 
         ${PROJECT_BINARY_DIR}
         ${PROJECT_SOURCE_DIR}/include
+# Homebrew nlohmann-json include path for macOS
+        $<$<PLATFORM_ID:Darwin>:/opt/homebrew/opt/nlohmann-json/include>
 )
