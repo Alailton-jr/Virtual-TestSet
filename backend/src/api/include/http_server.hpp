@@ -31,6 +31,7 @@ public:
     void setSequenceEngine(std::shared_ptr<SequenceEngine> engine);
     void setGooseSubscriber(std::shared_ptr<GooseSubscriber> subscriber);
     void setAnalyzerEngine(std::shared_ptr<AnalyzerEngine> analyzer);
+    void setWSServer(class WSServer* wsServer);
 
 private:
     // Setup route handlers
@@ -95,6 +96,7 @@ private:
     std::shared_ptr<SequenceEngine> sequenceEngine_;
     std::shared_ptr<GooseSubscriber> gooseSubscriber_;
     std::shared_ptr<AnalyzerEngine> analyzerEngine_;
+    class WSServer* wsServer_;
 };
 
 #endif // HTTP_SERVER_HPP

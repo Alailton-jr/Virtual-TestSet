@@ -15,6 +15,7 @@
 #elif defined(__APPLE__)
 #include <net/if_dl.h>
 #include <net/bpf.h>
+#include <fcntl.h>  // For open() and O_RDWR
 #endif
 
 // SV protocol constants
@@ -53,11 +54,42 @@ void SVPublisherInstance::initRawSocket() {
         throw std::runtime_error("Failed to create raw socket: " + std::string(strerror(errno)));
     }
 #elif defined(__APPLE__)
-    // On macOS, raw socket creation is simplified for now
-    // In production, you'd use BPF or libpcap
-    rawSocket_ = socket(AF_INET, SOCK_DGRAM, 0);
+    // On macOS, use BPF (Berkeley Packet Filter) for raw packet access
+    // Try to open /dev/bpf devices (0-99)
+    for (int i = 0; i < 100; i++) {
+        char bpf_dev[32];
+        snprintf(bpf_dev, sizeof(bpf_dev), "/dev/bpf%d", i);
+        rawSocket_ = open(bpf_dev, O_RDWR);
+        if (rawSocket_ >= 0) {
+            break;
+        }
+    }
+    
     if (rawSocket_ < 0) {
-        throw std::runtime_error("Failed to create socket: " + std::string(strerror(errno)));
+        throw std::runtime_error("Failed to open BPF device (requires root): " + std::string(strerror(errno)));
+    }
+    
+    // Set immediate mode (don't wait for buffer to fill)
+    unsigned int enable = 1;
+    if (ioctl(rawSocket_, BIOCIMMEDIATE, &enable) < 0) {
+        close(rawSocket_);
+        throw std::runtime_error("Failed to set BPF immediate mode: " + std::string(strerror(errno)));
+    }
+    
+    // Get buffer length
+    unsigned int buflen;
+    if (ioctl(rawSocket_, BIOCGBLEN, &buflen) < 0) {
+        close(rawSocket_);
+        throw std::runtime_error("Failed to get BPF buffer length: " + std::string(strerror(errno)));
+    }
+    
+    // Bind to first available network interface
+    // In production, you'd want to specify the interface or detect it
+    struct ifreq ifr;
+    strncpy(ifr.ifr_name, "en0", IFNAMSIZ);  // Typically the default ethernet/wifi on macOS
+    if (ioctl(rawSocket_, BIOCSETIF, &ifr) < 0) {
+        close(rawSocket_);
+        throw std::runtime_error("Failed to bind BPF to interface en0: " + std::string(strerror(errno)));
     }
 #else
     #error "Unsupported platform for raw sockets"
@@ -223,11 +255,13 @@ void SVPublisherInstance::sendSVPacket() {
         // Ignore send errors - they happen if no interface is available
     }
 #elif defined(__APPLE__)
-    // On macOS, sending raw Ethernet frames requires BPF or libpcap
-    // For now, we'll skip sending (this is a placeholder)
-    // In production, integrate with libpcap for cross-platform raw frame sending
-    (void)frame;  // Silence unused variable warning
-    (void)offset;
+    // On macOS, use BPF write() to send raw Ethernet frame
+    ssize_t sent = write(rawSocket_, frame, offset);
+    
+    if (sent < 0) {
+        // Ignore send errors - they happen if interface is down or permissions issue
+        // In production, log this error
+    }
 #endif
 }
 

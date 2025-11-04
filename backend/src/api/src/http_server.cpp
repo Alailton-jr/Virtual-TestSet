@@ -6,7 +6,7 @@
 #include <ctime>
 
 HTTPServer::HTTPServer(int port)
-    : port_(port), running_(false) {
+    : port_(port), running_(false), wsServer_(nullptr) {
     server_ = std::make_unique<httplib::Server>();
     setupRoutes();
 }
@@ -172,6 +172,10 @@ void HTTPServer::setGooseSubscriber(std::shared_ptr<GooseSubscriber> subscriber)
 
 void HTTPServer::setAnalyzerEngine(std::shared_ptr<AnalyzerEngine> analyzer) {
     analyzerEngine_ = analyzer;
+}
+
+void HTTPServer::setWSServer(WSServer* wsServer) {
+    wsServer_ = wsServer;
 }
 
 // Health endpoint

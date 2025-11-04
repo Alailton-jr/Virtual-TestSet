@@ -14,6 +14,7 @@
 
 #include "tests.hpp"
 #include "http_server.hpp"
+#include "ws_server.hpp"
 #include "sv_publisher_manager.hpp"
 #include <time.h>
 #include <filesystem>
@@ -730,10 +731,9 @@ AppConfig parseArgs(int argc, char* argv[]) {
         std::cout << "[CONFIG] VTS_LOG_FILE=" << env_log_file << std::endl;
     }
     
-    // macOS: Default to no-net mode (can be overridden with explicit flag)
+    // macOS: Network operations enabled, but without real-time guarantees
 #ifdef VTS_PLATFORM_MAC
-    config.no_net = true;
-    std::cout << "[CONFIG] macOS detected - defaulting to no-net mode" << std::endl;
+    std::cout << "[CONFIG] macOS detected - network operations enabled (no RT guarantees)" << std::endl;
 #endif
     
     // Parse command-line arguments
@@ -865,10 +865,20 @@ int main(int argc, char* argv[]){
     
     HTTPServer httpServer(8081);  // Use different port than TCP server
     httpServer.setSVPublisherManager(svManager);
+    
+    // Initialize WebSocket server
+    LOG_INFO("WS", "Initializing WebSocket server...");
+    WSServer wsServer(8082);  // WebSocket on port 8082
+    httpServer.setWSServer(&wsServer);
+    
+    // Start both servers
     httpServer.start();
+    wsServer.start();
     
     LOG_INFO("HTTP", "HTTP API server running on port 8081");
+    LOG_INFO("WS", "WebSocket server running on port 8082");
     LOG_INFO("HTTP", "API endpoints available at http://localhost:8081/api/v1/");
+    LOG_INFO("WS", "WebSocket available at ws://localhost:8082");
 
     // Main tick loop for SV publishers
     LOG_INFO("SV", "Starting SV publisher tick loop...");
@@ -881,6 +891,7 @@ int main(int argc, char* argv[]){
     }
     
     // Cleanup (unreachable in current implementation - would need signal handler)
+    wsServer.stop();
     httpServer.stop();
     Metrics::printSummary();
     Logger::shutdown();
