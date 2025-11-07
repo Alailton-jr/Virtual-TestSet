@@ -4,6 +4,7 @@
 #include "rt_utils.hpp"
 #include "logger.hpp"
 #include "metrics.hpp"
+#include "global_flags.hpp"
 
 #include <chrono>
 #include <vector>
@@ -189,6 +190,41 @@ void process_GOOSE_packet(uint8_t* frame, ssize_t frameSize, int i, SnifferClass
     
     // Successfully received and parsed GOOSE packet
     METRIC_RECV_FRAME();
+    
+    // Trip rule evaluation
+    if (sniffer->tripEvaluator) {
+        // Update trip evaluator with GOOSE data points
+        // For now, we update based on the goCbRef and boolean values
+        // In a full implementation, we would extract all data points from the GOOSE message
+        
+        std::string goCbRef = sniffer->goInfo[static_cast<size_t>(goIdx)].goCbRef;
+        
+        // Update data points for each boolean value in the GOOSE message
+        for (size_t idx = 0; idx < boolDat.size(); idx++) {
+            std::string dataPath = goCbRef + "/data" + std::to_string(idx);
+            sniffer->tripEvaluator->updateDataPoint(dataPath, static_cast<bool>(boolDat[idx]));
+        }
+        
+        // Evaluate trip rules
+        auto result = sniffer->tripEvaluator->evaluate();
+        
+        if (result.triggered) {
+            LOG_INFO("GOOSE", "Trip rule triggered: %s - %s", 
+                     result.ruleName.c_str(), result.message.c_str());
+            
+            // Set global trip flag for sequence engine coordination
+            vts::setTripFlag();
+            
+            // Emit WebSocket event if server is available
+            auto ws = sniffer->wsServer.lock();
+            if (ws) {
+                // TODO: Emit GOOSE trip event via WebSocket
+                // Format: {"type": "gooseEvent", "ruleName": "...", "timestamp": ...}
+                // ws->broadcast("goose/events", event_json);
+            }
+        }
+    }
+    
     // std::cout << "GOOSE Received: "<< (boolDat[0] != 0) << std::endl;
 }
 

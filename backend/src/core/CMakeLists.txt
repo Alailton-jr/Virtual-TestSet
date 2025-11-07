@@ -1,6 +1,7 @@
 add_library(vts_core
     src/sv_publisher_manager.cpp
     src/sv_publisher_instance.cpp
+    src/global_flags.cpp
 )
 
 target_include_directories(vts_core

@@ -27,6 +27,7 @@ add_executable(vts_tests
     test_mac_parser.cpp
     test_smpCnt_wrap.cpp
     test_comtrade_parser.cpp
+    test_trip_rule_evaluator.cpp
     # test_threadpool.cpp - TODO: Adapt to ThreadPool's submit() API with function arguments
     test_main.cpp
 )
@@ -38,6 +39,7 @@ target_link_libraries(vts_tests
     tools
     platform
     vts_io
+    sniffer
 )
 
 target_include_directories(vts_tests PRIVATE
@@ -45,6 +47,7 @@ target_include_directories(vts_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/tools/include
     ${CMAKE_SOURCE_DIR}/src/platform/include
     ${CMAKE_SOURCE_DIR}/src/io/include
+    ${CMAKE_SOURCE_DIR}/src/sniffer/include
 )
 
 # Discover and register tests
@@ -57,3 +60,4 @@ add_test(NAME VLAN_Validation COMMAND vts_tests --gtest_filter=VLANTest.*)
 add_test(NAME MAC_Parser COMMAND vts_tests --gtest_filter=MACParserTest.*)
 add_test(NAME smpCnt_Wrap COMMAND vts_tests --gtest_filter=SmpCntWrapTest.*)
 add_test(NAME ThreadPool COMMAND vts_tests --gtest_filter=ThreadPoolTest.*)
+add_test(NAME TripRuleEvaluator COMMAND vts_tests --gtest_filter=TripRuleEvaluatorTest.*)

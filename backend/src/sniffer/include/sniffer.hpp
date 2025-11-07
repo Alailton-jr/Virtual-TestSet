@@ -8,10 +8,15 @@
 #include <cstring>
 #include <atomic>
 #include <array>
+#include <memory>
 
 #include "general_definition.hpp"
 #include "raw_socket_platform.hpp"
 #include "thread_pool.hpp"
+#include "trip_rule_evaluator.hpp"
+
+// Forward declaration
+class WSServer;
 
 #define WINDOW_STEP 0.2
 
@@ -37,8 +42,15 @@ public:
     RawSocket socket;
     std::array<std::atomic<uint8_t>, 16>* digitalInput;
     std::vector<Goose_info> goInfo;
+    
+    // Trip rule evaluator for GOOSE-based trip conditions
+    std::unique_ptr<vts::sniffer::TripRuleEvaluator> tripEvaluator;
+    
+    // WebSocket server for event emission (weak_ptr to avoid ownership issues)
+    std::weak_ptr<WSServer> wsServer;
 
     SnifferClass() : running(false), stop(false), threadStarted(false) {
+        tripEvaluator = std::make_unique<vts::sniffer::TripRuleEvaluator>();
     }
     
     ~SnifferClass(){
@@ -77,6 +89,15 @@ public:
         stop.store(true, std::memory_order_release);
         pthread_join(this->thd, NULL);
         threadStarted = false;
+    }
+    
+    /**
+     * @brief Set the WebSocket server for GOOSE event emission
+     * 
+     * @param server Shared pointer to WSServer
+     */
+    void setWebSocketServer(std::shared_ptr<WSServer> server) {
+        wsServer = server;
     }
 
 };
