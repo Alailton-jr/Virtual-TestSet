@@ -26,6 +26,7 @@ add_executable(vts_tests
     test_vlan.cpp
     test_mac_parser.cpp
     test_smpCnt_wrap.cpp
+    test_comtrade_parser.cpp
     # test_threadpool.cpp - TODO: Adapt to ThreadPool's submit() API with function arguments
     test_main.cpp
 )
@@ -36,12 +37,14 @@ target_link_libraries(vts_tests
     protocols
     tools
     platform
+    vts_io
 )
 
 target_include_directories(vts_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/protocols/include
     ${CMAKE_SOURCE_DIR}/src/tools/include
     ${CMAKE_SOURCE_DIR}/src/platform/include
+    ${CMAKE_SOURCE_DIR}/src/io/include
 )
 
 # Discover and register tests

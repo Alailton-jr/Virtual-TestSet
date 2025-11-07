@@ -64,6 +64,7 @@ add_subdirectory(src/goose)
 add_subdirectory(src/api)
 add_subdirectory(src/core)
 add_subdirectory(src/synth)
+add_subdirectory(src/io)
 
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/files
