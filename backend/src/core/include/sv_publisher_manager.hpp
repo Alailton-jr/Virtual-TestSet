@@ -27,6 +27,10 @@ public:
     // Updates
     void updatePhasors(const std::string& streamId, const nlohmann::json& phasorData);
     void updateHarmonics(const std::string& streamId, const nlohmann::json& harmonicsData);
+    
+    // Sequence engine integration
+    void updateStreamPhasors(const std::string& streamId, double freq, 
+                            const std::map<std::string, std::pair<double, double>>& channels);
 
     // High-resolution tick
     void tickAll();

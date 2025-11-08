@@ -212,6 +212,35 @@ void SVPublisherManager::tickAll() {
     }
 }
 
+void SVPublisherManager::updateStreamPhasors(const std::string& streamId, double freq,
+                                              const std::map<std::string, std::pair<double, double>>& channels) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    
+    auto it = streams_.find(streamId);
+    if (it == streams_.end()) {
+        // Stream not found - log warning but don't throw
+        return;
+    }
+    
+    // Build JSON for updatePhasors
+    nlohmann::json phasorData;
+    phasorData["freq"] = freq;
+    
+    nlohmann::json channelsJson = nlohmann::json::object();
+    for (const auto& [channelId, phasor] : channels) {
+        channelsJson[channelId] = {
+            {"mag", phasor.first},
+            {"angleDeg", phasor.second}
+        };
+    }
+    phasorData["channels"] = channelsJson;
+    
+    // Call the existing updatePhasors method which unlocks properly
+    mutex_.unlock();
+    updatePhasors(streamId, phasorData);
+    mutex_.lock();
+}
+
 std::shared_ptr<SVPublisherInstance> SVPublisherManager::getInstance(const std::string& streamId) {
     std::lock_guard<std::mutex> lock(mutex_);
     

@@ -12,9 +12,11 @@ target_include_directories( ${PROJECT_NAME}
         ${PROJECT_SOURCE_DIR}/include
     PRIVATE
         ${CMAKE_SOURCE_DIR}/src/core/include
+        ${CMAKE_SOURCE_DIR}/src/analyzer/include
 )
 
 target_link_libraries(${PROJECT_NAME}
     tools
+    vts_analyzer
     ${FFTW3_LIBRARY}
 )

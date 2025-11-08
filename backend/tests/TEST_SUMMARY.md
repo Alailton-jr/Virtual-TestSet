@@ -1,11 +1,28 @@
 # Unit Test Suite Summary
 
 **Test Framework**: Google Test v1.14.0  
-**Status**: ✅ All 50 tests passing  
-**Last Run**: 2025-11-03  
-**Sanitizers**: ASAN clean
+**Status**: ✅ All 148 tests passing  
+**Last Run**: November 7, 2025  
+**Sanitizers**: Not yet run (see TASK_12_TESTING.md for setup)  
+**Coverage**: ~50-60% estimated (untested modules exist)
 
 ## Test Coverage
+
+### Completed Test Suites (10 suites, 148 tests)
+
+| Suite | Tests | Status |
+|-------|-------|--------|
+| BEREncodingTest | 12 | ✅ Passing |
+| VLANTest | 15 | ✅ Passing |
+| MACParserTest | 14 | ✅ Passing |
+| SmpCntWrapTest | 9 | ✅ Passing |
+| ComtradeParserTest | 14 | ✅ Passing |
+| TripRuleEvaluatorTest | 30 | ✅ Passing |
+| SequenceEngineTest | 20 | ✅ Passing |
+| ImpedanceCalculatorTest | 11 | ✅ Passing |
+| RampingTesterTest | 11 | ✅ Passing |
+| OvercurrentTesterTest | 12 | ✅ Passing |
+| **TOTAL** | **148** | **100%** |
 
 ### 1. BER Encoding Tests (12 tests) ✅
 **File**: `test_ber_encoding.cpp`  

@@ -65,6 +65,9 @@ add_subdirectory(src/api)
 add_subdirectory(src/core)
 add_subdirectory(src/synth)
 add_subdirectory(src/io)
+add_subdirectory(src/sequence)
+add_subdirectory(src/analyzer)
+add_subdirectory(src/testers)
 
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/files

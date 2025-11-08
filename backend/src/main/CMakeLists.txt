@@ -15,6 +15,8 @@ target_link_libraries(${PROJECT_NAME}
     api
     vts_core
     vts_synth
+    sequence
+    vts_analyzer
     Threads::Threads
 )
 

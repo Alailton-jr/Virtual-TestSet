@@ -15,8 +15,14 @@
 #include "thread_pool.hpp"
 #include "trip_rule_evaluator.hpp"
 
-// Forward declaration
+// Forward declarations
 class WSServer;
+
+namespace vts {
+namespace analyzer {
+    class AnalyzerEngine;
+}
+}
 
 #define WINDOW_STEP 0.2
 
@@ -48,6 +54,9 @@ public:
     
     // WebSocket server for event emission (weak_ptr to avoid ownership issues)
     std::weak_ptr<WSServer> wsServer;
+    
+    // Analyzer engine for SV stream analysis (weak_ptr to avoid ownership issues)
+    std::weak_ptr<vts::analyzer::AnalyzerEngine> analyzerEngine;
 
     SnifferClass() : running(false), stop(false), threadStarted(false) {
         tripEvaluator = std::make_unique<vts::sniffer::TripRuleEvaluator>();
@@ -98,6 +107,15 @@ public:
      */
     void setWebSocketServer(std::shared_ptr<WSServer> server) {
         wsServer = server;
+    }
+    
+    /**
+     * @brief Set the analyzer engine for SV stream analysis
+     * 
+     * @param analyzer Shared pointer to AnalyzerEngine
+     */
+    void setAnalyzerEngine(std::shared_ptr<vts::analyzer::AnalyzerEngine> analyzer) {
+        analyzerEngine = analyzer;
     }
 
 };

@@ -1,9 +1,37 @@
 #include "http_server.hpp"
 #include "sv_publisher_manager.hpp"
+#include "sequence_engine.hpp"
+#include "analyzer_engine.hpp"
+#include "ws_server.hpp"
+#include "impedance_calculator.hpp"
+#include "ramping_tester.hpp"
+#include "distance_tester.hpp"
+#include "overcurrent_tester.hpp"
+#include "differential_tester.hpp"
+#include "global_flags.hpp"
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <ctime>
+
+// Using declarations for tester types to avoid namespace clutter
+using vts::testers::RampVariable;
+using vts::testers::RampConfig;
+using vts::testers::RampResult;
+using vts::testers::PhasorState;
+using vts::testers::SourceImpedance;
+using vts::testers::FaultType;
+using vts::testers::DistancePoint;
+using vts::testers::DistanceResult;
+using vts::testers::DistanceTestConfig;
+using vts::testers::OCSettings;
+using vts::testers::OCPoint;
+using vts::testers::OCResult;
+using vts::testers::OCTestConfig;
+using vts::testers::OCCurve;
+using vts::testers::DifferentialPoint;
+using vts::testers::DifferentialResult;
+using vts::testers::DifferentialTestConfig;
 
 HTTPServer::HTTPServer(int port)
     : port_(port), running_(false), wsServer_(nullptr) {
@@ -84,6 +112,18 @@ void HTTPServer::setupRoutes() {
         handleSequenceStop(req, res);
     });
     
+    server_->Get("/api/v1/sequences/status", [this](const httplib::Request& req, httplib::Response& res) {
+        handleSequenceStatus(req, res);
+    });
+    
+    server_->Post("/api/v1/sequences/pause", [this](const httplib::Request& req, httplib::Response& res) {
+        handleSequencePause(req, res);
+    });
+    
+    server_->Post("/api/v1/sequences/resume", [this](const httplib::Request& req, httplib::Response& res) {
+        handleSequenceResume(req, res);
+    });
+    
     // GOOSE endpoints (Module 4)
     server_->Post("/api/v1/goose/scan", [this](const httplib::Request& req, httplib::Response& res) {
         handleGooseScan(req, res);
@@ -96,6 +136,14 @@ void HTTPServer::setupRoutes() {
     // Analyzer endpoint (Module 5)
     server_->Post("/api/v1/analyzer/select", [this](const httplib::Request& req, httplib::Response& res) {
         handleAnalyzerSelect(req, res);
+    });
+    
+    server_->Post("/api/v1/analyzer/stop", [this](const httplib::Request& req, httplib::Response& res) {
+        handleAnalyzerStop(req, res);
+    });
+    
+    server_->Get("/api/v1/analyzer/status", [this](const httplib::Request& req, httplib::Response& res) {
+        handleAnalyzerStatus(req, res);
     });
     
     // Impedance injection endpoint (Module 6)
@@ -162,7 +210,7 @@ void HTTPServer::setSVPublisherManager(std::shared_ptr<SVPublisherManager> manag
     svManager_ = manager;
 }
 
-void HTTPServer::setSequenceEngine(std::shared_ptr<SequenceEngine> engine) {
+void HTTPServer::setSequenceEngine(std::shared_ptr<vts::sequence::SequenceEngine> engine) {
     sequenceEngine_ = engine;
 }
 
@@ -170,12 +218,32 @@ void HTTPServer::setGooseSubscriber(std::shared_ptr<GooseSubscriber> subscriber)
     gooseSubscriber_ = subscriber;
 }
 
-void HTTPServer::setAnalyzerEngine(std::shared_ptr<AnalyzerEngine> analyzer) {
+void HTTPServer::setAnalyzerEngine(std::shared_ptr<vts::analyzer::AnalyzerEngine> analyzer) {
     analyzerEngine_ = analyzer;
 }
 
 void HTTPServer::setWSServer(WSServer* wsServer) {
     wsServer_ = wsServer;
+}
+
+void HTTPServer::setImpedanceCalculator(std::shared_ptr<vts::testers::ImpedanceCalculator> calculator) {
+    impedanceCalculator_ = calculator;
+}
+
+void HTTPServer::setRampingTester(std::shared_ptr<vts::testers::RampingTester> tester) {
+    rampingTester_ = tester;
+}
+
+void HTTPServer::setDistanceTester(std::shared_ptr<vts::testers::DistanceTester> tester) {
+    distanceTester_ = tester;
+}
+
+void HTTPServer::setOvercurrentTester(std::shared_ptr<vts::testers::OvercurrentTester> tester) {
+    overcurrentTester_ = tester;
+}
+
+void HTTPServer::setDifferentialTester(std::shared_ptr<vts::testers::DifferentialTester> tester) {
+    differentialTester_ = tester;
 }
 
 // Health endpoint
@@ -363,20 +431,226 @@ void HTTPServer::handleComtradePlayback(const httplib::Request& /*req*/, httplib
 
 // Sequence endpoints
 void HTTPServer::handleSequenceRun(const httplib::Request& req, httplib::Response& res) {
+    if (!sequenceEngine_) {
+        sendErrorResponse(res, 503, "Sequence engine not initialized");
+        return;
+    }
+    
     try {
         json body = json::parse(req.body);
         
-        // TODO: Start sequence execution
+        // Parse sequence from JSON
+        vts::sequence::Sequence seq;
         
-        sendJsonResponse(res, 200, {{"message", "Sequence started"}});
+        // Parse active streams
+        if (!body.contains("activeStreams") || !body["activeStreams"].is_array()) {
+            sendErrorResponse(res, 400, "Missing or invalid 'activeStreams' field");
+            return;
+        }
+        
+        for (const auto& streamId : body["activeStreams"]) {
+            if (!streamId.is_string()) {
+                sendErrorResponse(res, 400, "Stream IDs must be strings");
+                return;
+            }
+            seq.activeStreams.push_back(streamId.get<std::string>());
+        }
+        
+        // Parse states
+        if (!body.contains("states") || !body["states"].is_array()) {
+            sendErrorResponse(res, 400, "Missing or invalid 'states' field");
+            return;
+        }
+        
+        for (const auto& stateJson : body["states"]) {
+            vts::sequence::SequenceState state;
+            
+            // Parse state name
+            if (!stateJson.contains("name") || !stateJson["name"].is_string()) {
+                sendErrorResponse(res, 400, "State missing 'name' field");
+                return;
+            }
+            state.name = stateJson["name"].get<std::string>();
+            
+            // Parse duration
+            if (!stateJson.contains("durationSec") || !stateJson["durationSec"].is_number()) {
+                sendErrorResponse(res, 400, "State missing 'durationSec' field");
+                return;
+            }
+            state.durationSec = stateJson["durationSec"].get<double>();
+            
+            // Parse transition
+            if (!stateJson.contains("transition") || !stateJson["transition"].is_object()) {
+                sendErrorResponse(res, 400, "State missing 'transition' field");
+                return;
+            }
+            
+            std::string transitionType = stateJson["transition"]["type"].get<std::string>();
+            if (transitionType == "time") {
+                state.transition = vts::sequence::StateTransition(vts::sequence::TransitionType::TIME);
+            } else if (transitionType == "goose_trip") {
+                state.transition = vts::sequence::StateTransition(vts::sequence::TransitionType::GOOSE_TRIP);
+            } else {
+                sendErrorResponse(res, 400, "Invalid transition type: " + transitionType);
+                return;
+            }
+            
+            // Parse phasors
+            if (!stateJson.contains("phasors") || !stateJson["phasors"].is_object()) {
+                sendErrorResponse(res, 400, "State missing 'phasors' field");
+                return;
+            }
+            
+            for (const auto& [streamId, streamPhasors] : stateJson["phasors"].items()) {
+                vts::sequence::StreamPhasorState phasorState;
+                
+                // Parse frequency
+                if (streamPhasors.contains("freq") && streamPhasors["freq"].is_number()) {
+                    phasorState.freq = streamPhasors["freq"].get<double>();
+                }
+                
+                // Parse channels
+                if (streamPhasors.contains("channels") && streamPhasors["channels"].is_object()) {
+                    for (const auto& [channelId, channelData] : streamPhasors["channels"].items()) {
+                        if (channelData.contains("mag") && channelData.contains("angleDeg") &&
+                            channelData["mag"].is_number() && channelData["angleDeg"].is_number()) {
+                            double mag = channelData["mag"].get<double>();
+                            double angle = channelData["angleDeg"].get<double>();
+                            phasorState.channels[channelId] = vts::sequence::ChannelPhasor(mag, angle);
+                        }
+                    }
+                }
+                
+                state.phasors[streamId] = phasorState;
+            }
+            
+            seq.states.push_back(state);
+        }
+        
+        // Start the sequence
+        if (!sequenceEngine_->start(seq)) {
+            sendErrorResponse(res, 400, sequenceEngine_->getLastError());
+            return;
+        }
+        
+        json response = {
+            {"message", "Sequence started successfully"},
+            {"stateCount", seq.states.size()},
+            {"activeStreams", seq.activeStreams}
+        };
+        sendJsonResponse(res, 200, response);
+        
     } catch (const json::exception& e) {
         sendErrorResponse(res, 400, std::string("Invalid JSON: ") + e.what());
+    } catch (const std::exception& e) {
+        sendErrorResponse(res, 500, std::string("Failed to start sequence: ") + e.what());
     }
 }
 
 void HTTPServer::handleSequenceStop(const httplib::Request& /*req*/, httplib::Response& res) {
-    // TODO: Stop sequence execution
-    sendJsonResponse(res, 200, {{"message", "Sequence stopped"}});
+    if (!sequenceEngine_) {
+        sendErrorResponse(res, 503, "Sequence engine not initialized");
+        return;
+    }
+    
+    try {
+        sequenceEngine_->stop();
+        
+        json response = {
+            {"message", "Sequence stopped successfully"}
+        };
+        sendJsonResponse(res, 200, response);
+        
+    } catch (const std::exception& e) {
+        sendErrorResponse(res, 500, std::string("Failed to stop sequence: ") + e.what());
+    }
+}
+
+void HTTPServer::handleSequenceStatus(const httplib::Request& /*req*/, httplib::Response& res) {
+    if (!sequenceEngine_) {
+        sendErrorResponse(res, 503, "Sequence engine not initialized");
+        return;
+    }
+    
+    try {
+        auto status = sequenceEngine_->getStatus();
+        std::string statusStr;
+        
+        switch (status) {
+            case vts::sequence::SequenceStatus::IDLE:
+                statusStr = "idle";
+                break;
+            case vts::sequence::SequenceStatus::RUNNING:
+                statusStr = "running";
+                break;
+            case vts::sequence::SequenceStatus::PAUSED:
+                statusStr = "paused";
+                break;
+            case vts::sequence::SequenceStatus::COMPLETED:
+                statusStr = "completed";
+                break;
+            case vts::sequence::SequenceStatus::STOPPED:
+                statusStr = "stopped";
+                break;
+            case vts::sequence::SequenceStatus::ERROR:
+                statusStr = "error";
+                break;
+        }
+        
+        json response = {
+            {"status", statusStr},
+            {"currentState", sequenceEngine_->getCurrentStateIndex()},
+            {"stateElapsed", sequenceEngine_->getStateElapsedTime()},
+            {"totalElapsed", sequenceEngine_->getTotalElapsedTime()}
+        };
+        
+        if (status == vts::sequence::SequenceStatus::ERROR) {
+            response["error"] = sequenceEngine_->getLastError();
+        }
+        
+        sendJsonResponse(res, 200, response);
+        
+    } catch (const std::exception& e) {
+        sendErrorResponse(res, 500, std::string("Failed to get sequence status: ") + e.what());
+    }
+}
+
+void HTTPServer::handleSequencePause(const httplib::Request& /*req*/, httplib::Response& res) {
+    if (!sequenceEngine_) {
+        sendErrorResponse(res, 503, "Sequence engine not initialized");
+        return;
+    }
+    
+    try {
+        sequenceEngine_->pause();
+        
+        json response = {
+            {"message", "Sequence paused successfully"}
+        };
+        sendJsonResponse(res, 200, response);
+        
+    } catch (const std::exception& e) {
+        sendErrorResponse(res, 500, std::string("Failed to pause sequence: ") + e.what());
+    }
+}
+
+void HTTPServer::handleSequenceResume(const httplib::Request& /*req*/, httplib::Response& res) {
+    if (!sequenceEngine_) {
+        sendErrorResponse(res, 503, "Sequence engine not initialized");
+        return;
+    }
+    
+    try {
+        sequenceEngine_->resume();
+        
+        json response = {
+            {"message", "Sequence resumed successfully"}
+        };
+        sendJsonResponse(res, 200, response);
+        
+    } catch (const std::exception& e) {
+        sendErrorResponse(res, 500, std::string("Failed to resume sequence: ") + e.what());
+    }
 }
 
 // GOOSE endpoints
@@ -399,79 +673,574 @@ void HTTPServer::handleGooseConfig(const httplib::Request& req, httplib::Respons
 
 // Analyzer endpoint
 void HTTPServer::handleAnalyzerSelect(const httplib::Request& req, httplib::Response& res) {
+    if (!analyzerEngine_) {
+        sendErrorResponse(res, 503, "Analyzer engine not available");
+        return;
+    }
+
     try {
         json body = json::parse(req.body);
         
-        // TODO: Select analyzer stream
+        // Validate required fields
+        if (!body.contains("streamMac")) {
+            sendErrorResponse(res, 400, "Missing streamMac field");
+            return;
+        }
         
-        sendJsonResponse(res, 200, {{"message", "Analyzer stream selected"}});
+        if (!body.contains("sampleRate")) {
+            sendErrorResponse(res, 400, "Missing sampleRate field");
+            return;
+        }
+        
+        std::string streamMac = body["streamMac"];
+        int sampleRate = body["sampleRate"];
+        
+        // Validate MAC address format
+        if (streamMac.length() != 17) {
+            sendErrorResponse(res, 400, "Invalid MAC address format");
+            return;
+        }
+        
+        // Validate sample rate
+        if (sampleRate <= 0 || sampleRate > 100000) {
+            sendErrorResponse(res, 400, "Invalid sample rate");
+            return;
+        }
+        
+        // Start analyzer
+        bool success = analyzerEngine_->start(streamMac, sampleRate);
+        
+        if (success) {
+            sendJsonResponse(res, 200, {
+                {"message", "Analyzer started"},
+                {"streamMac", streamMac},
+                {"sampleRate", sampleRate}
+            });
+        } else {
+            sendErrorResponse(res, 500, analyzerEngine_->getLastError());
+        }
+        
     } catch (const json::exception& e) {
         sendErrorResponse(res, 400, std::string("Invalid JSON: ") + e.what());
     }
 }
 
+void HTTPServer::handleAnalyzerStop(const httplib::Request& /*req*/, httplib::Response& res) {
+    if (!analyzerEngine_) {
+        sendErrorResponse(res, 503, "Analyzer engine not available");
+        return;
+    }
+    
+    analyzerEngine_->stop();
+    
+    sendJsonResponse(res, 200, {
+        {"message", "Analyzer stopped"}
+    });
+}
+
+void HTTPServer::handleAnalyzerStatus(const httplib::Request& /*req*/, httplib::Response& res) {
+    if (!analyzerEngine_) {
+        sendErrorResponse(res, 503, "Analyzer engine not available");
+        return;
+    }
+    
+    bool running = analyzerEngine_->isRunning();
+    std::string streamMac = analyzerEngine_->getStreamMac();
+    
+    sendJsonResponse(res, 200, {
+        {"running", running},
+        {"streamMac", streamMac}
+    });
+}
+
+
 // Impedance injection endpoint
 void HTTPServer::handleImpedanceApply(const httplib::Request& req, httplib::Response& res) {
+    if (!impedanceCalculator_) {
+        sendErrorResponse(res, 503, "Impedance calculator not initialized");
+        return;
+    }
+    
+    if (!svManager_) {
+        sendErrorResponse(res, 503, "SV publisher manager not initialized");
+        return;
+    }
+    
     try {
         json body = json::parse(req.body);
         
-        // TODO: Apply impedance injection
+        // Parse impedance parameters
+        std::string faultTypeStr = body.value("faultType", "ABC");
+        double R = body.value("R", 0.0);
+        double X = body.value("X", 0.0);
         
-        sendJsonResponse(res, 200, {{"message", "Impedance applied"}});
+        SourceImpedance source;
+        source.RS1 = body.value("RS1", 1.0);
+        source.XS1 = body.value("XS1", 10.0);
+        source.RS0 = body.value("RS0", 3.0);
+        source.XS0 = body.value("XS0", 30.0);
+        source.Vprefault = body.value("Vprefault", 66395.0); // 115kV/sqrt(3)
+        
+        // Parse fault type
+        FaultType faultType = impedanceCalculator_->parseFaultType(faultTypeStr);
+        
+        // Create fault impedance structure
+        vts::testers::FaultImpedance faultZ;
+        faultZ.R = R;
+        faultZ.X = X;
+        
+        // Calculate phasors
+        PhasorState state = impedanceCalculator_->calculateFault(
+            faultType, faultZ, source
+        );
+        
+        // Apply to stream if specified
+        std::string streamId = body.value("streamId", "");
+        if (!streamId.empty()) {
+            // Update stream phasors
+            json phasorUpdate = {
+                {"voltage", {
+                    {"A", {{"magnitude", std::abs(state.voltage.A)}, {"angle", std::arg(state.voltage.A) * 180.0 / M_PI}}},
+                    {"B", {{"magnitude", std::abs(state.voltage.B)}, {"angle", std::arg(state.voltage.B) * 180.0 / M_PI}}},
+                    {"C", {{"magnitude", std::abs(state.voltage.C)}, {"angle", std::arg(state.voltage.C) * 180.0 / M_PI}}}
+                }},
+                {"current", {
+                    {"A", {{"magnitude", std::abs(state.current.A)}, {"angle", std::arg(state.current.A) * 180.0 / M_PI}}},
+                    {"B", {{"magnitude", std::abs(state.current.B)}, {"angle", std::arg(state.current.B) * 180.0 / M_PI}}},
+                    {"C", {{"magnitude", std::abs(state.current.C)}, {"angle", std::arg(state.current.C) * 180.0 / M_PI}}}
+                }}
+            };
+            
+            svManager_->updateStream(streamId, phasorUpdate);
+        }
+        
+        // Return calculated phasors
+        json response = {
+            {"voltage", {
+                {"A", {{"magnitude", std::abs(state.voltage.A)}, {"angle", std::arg(state.voltage.A) * 180.0 / M_PI}}},
+                {"B", {{"magnitude", std::abs(state.voltage.B)}, {"angle", std::arg(state.voltage.B) * 180.0 / M_PI}}},
+                {"C", {{"magnitude", std::abs(state.voltage.C)}, {"angle", std::arg(state.voltage.C) * 180.0 / M_PI}}}
+            }},
+            {"current", {
+                {"A", {{"magnitude", std::abs(state.current.A)}, {"angle", std::arg(state.current.A) * 180.0 / M_PI}}},
+                {"B", {{"magnitude", std::abs(state.current.B)}, {"angle", std::arg(state.current.B) * 180.0 / M_PI}}},
+                {"C", {{"magnitude", std::abs(state.current.C)}, {"angle", std::arg(state.current.C) * 180.0 / M_PI}}}
+            }},
+            {"faultType", faultTypeStr},
+            {"R", R},
+            {"X", X}
+        };
+        
+        sendJsonResponse(res, 200, response);
+        
     } catch (const json::exception& e) {
         sendErrorResponse(res, 400, std::string("Invalid JSON: ") + e.what());
+    } catch (const std::exception& e) {
+        sendErrorResponse(res, 500, std::string("Impedance calculation failed: ") + e.what());
     }
 }
 
 // Ramping test endpoint
 void HTTPServer::handleRampRun(const httplib::Request& req, httplib::Response& res) {
+    if (!rampingTester_) {
+        sendErrorResponse(res, 503, "Ramping tester not initialized");
+        return;
+    }
+    
+    if (!svManager_) {
+        sendErrorResponse(res, 503, "SV publisher manager not initialized");
+        return;
+    }
+    
     try {
         json body = json::parse(req.body);
         
-        // TODO: Start ramping test
+        // Parse configuration
+        RampConfig config;
+        config.variable = rampingTester_->parseVariable(body.value("variable", "VOLTAGE_3PH"));
+        config.startValue = body.value("startValue", 0.0);
+        config.endValue = body.value("endValue", 150.0);
+        config.stepSize = body.value("stepSize", 0.1);
+        config.stepDuration = body.value("stepDuration", 0.05);
+        config.monitorTrip = body.value("monitorTrip", true);
+        config.streamId = body.value("streamId", "");
         
-        sendJsonResponse(res, 200, {{"message", "Ramping test started"}});
+        // Set up callbacks
+        rampingTester_->setTripFlagGetter([]() {
+            return vts::isTripFlagSet();
+        });
+        
+        rampingTester_->setValueSetter([this, config](RampVariable var, double value) {
+            if (config.streamId.empty()) return;
+            
+            // Update stream based on variable type
+            json update;
+            switch (var) {
+                case RampVariable::VOLTAGE_A:
+                    update["voltage"]["A"]["magnitude"] = value;
+                    break;
+                case RampVariable::VOLTAGE_B:
+                    update["voltage"]["B"]["magnitude"] = value;
+                    break;
+                case RampVariable::VOLTAGE_C:
+                    update["voltage"]["C"]["magnitude"] = value;
+                    break;
+                case RampVariable::VOLTAGE_3PH:
+                    update["voltage"]["A"]["magnitude"] = value;
+                    update["voltage"]["B"]["magnitude"] = value;
+                    update["voltage"]["C"]["magnitude"] = value;
+                    break;
+                case RampVariable::CURRENT_A:
+                    update["current"]["A"]["magnitude"] = value;
+                    break;
+                case RampVariable::CURRENT_B:
+                    update["current"]["B"]["magnitude"] = value;
+                    break;
+                case RampVariable::CURRENT_C:
+                    update["current"]["C"]["magnitude"] = value;
+                    break;
+                case RampVariable::CURRENT_3PH:
+                    update["current"]["A"]["magnitude"] = value;
+                    update["current"]["B"]["magnitude"] = value;
+                    update["current"]["C"]["magnitude"] = value;
+                    break;
+                case RampVariable::FREQUENCY:
+                    update["frequency"] = value;
+                    break;
+            }
+            
+            svManager_->updateStream(config.streamId, update);
+        });
+        
+        // Run the ramp test
+        RampResult result = rampingTester_->run(config);
+        
+        // Return results
+        json response = {
+            {"pickupValue", result.pickupValue},
+            {"dropoffValue", result.dropoffValue},
+            {"resetRatio", result.resetRatio},
+            {"pickupTime", result.pickupTime},
+            {"dropoffTime", result.dropoffTime},
+            {"completed", result.completed},
+            {"error", result.error}
+        };
+        
+        sendJsonResponse(res, 200, response);
+        
     } catch (const json::exception& e) {
         sendErrorResponse(res, 400, std::string("Invalid JSON: ") + e.what());
+    } catch (const std::exception& e) {
+        sendErrorResponse(res, 500, std::string("Ramping test failed: ") + e.what());
     }
 }
 
 // Distance relay test endpoint
 void HTTPServer::handleDistanceRun(const httplib::Request& req, httplib::Response& res) {
+    if (!distanceTester_) {
+        sendErrorResponse(res, 503, "Distance tester not initialized");
+        return;
+    }
+    
+    if (!svManager_) {
+        sendErrorResponse(res, 503, "SV publisher manager not initialized");
+        return;
+    }
+    
     try {
         json body = json::parse(req.body);
         
-        // TODO: Start distance relay test
+        // Parse test configuration
+        DistanceTestConfig config;
         
-        sendJsonResponse(res, 200, {{"message", "Distance test started"}});
+        // Parse source impedance
+        if (body.contains("source")) {
+            auto source = body["source"];
+            config.source.RS1 = source.value("RS1", 1.0);
+            config.source.XS1 = source.value("XS1", 10.0);
+            config.source.RS0 = source.value("RS0", 3.0);
+            config.source.XS0 = source.value("XS0", 30.0);
+            config.source.Vprefault = source.value("Vprefault", 66395.0);
+        }
+        
+        // Parse test points
+        if (body.contains("points") && body["points"].is_array()) {
+            for (const auto& pt : body["points"]) {
+                DistancePoint point;
+                point.R = pt.value("R", 0.0);
+                point.X = pt.value("X", 0.0);
+                point.faultType = impedanceCalculator_->parseFaultType(pt.value("faultType", "ABC"));
+                point.expectedTime = pt.value("expectedTime", 0.0);
+                point.label = pt.value("label", "");
+                config.points.push_back(point);
+            }
+        }
+        
+        // Parse timing parameters
+        config.prefaultDuration = body.value("prefaultDuration", 1.0);
+        config.faultDuration = body.value("faultDuration", 5.0);
+        config.timeTolerance = body.value("timeTolerance", 0.05);
+        config.stopOnFirstFailure = body.value("stopOnFirstFailure", false);
+        config.streamId = body.value("streamId", "");
+        
+        // Set up callbacks
+        distanceTester_->setTripFlagGetter([]() {
+            return vts::isTripFlagSet();
+        });
+        
+        distanceTester_->setPhasorSetter([this, config](const PhasorState& state) {
+            if (config.streamId.empty()) return;
+            
+            json update = {
+                {"voltage", {
+                    {"A", {{"magnitude", std::abs(state.voltage.A)}, {"angle", std::arg(state.voltage.A) * 180.0 / M_PI}}},
+                    {"B", {{"magnitude", std::abs(state.voltage.B)}, {"angle", std::arg(state.voltage.B) * 180.0 / M_PI}}},
+                    {"C", {{"magnitude", std::abs(state.voltage.C)}, {"angle", std::arg(state.voltage.C) * 180.0 / M_PI}}}
+                }},
+                {"current", {
+                    {"A", {{"magnitude", std::abs(state.current.A)}, {"angle", std::arg(state.current.A) * 180.0 / M_PI}}},
+                    {"B", {{"magnitude", std::abs(state.current.B)}, {"angle", std::arg(state.current.B) * 180.0 / M_PI}}},
+                    {"C", {{"magnitude", std::abs(state.current.C)}, {"angle", std::arg(state.current.C) * 180.0 / M_PI}}}
+                }}
+            };
+            
+            svManager_->updateStream(config.streamId, update);
+        });
+        
+        // Run the distance test
+        auto results = distanceTester_->run(config);
+        
+        // Format results
+        json resultsJson = json::array();
+        for (const auto& result : results) {
+            resultsJson.push_back({
+                {"R", result.R},
+                {"X", result.X},
+                {"tripped", result.tripped},
+                {"tripTime", result.tripTime},
+                {"passed", result.passed},
+                {"error", result.error}
+            });
+        }
+        
+        json response = {
+            {"results", resultsJson},
+            {"totalPoints", results.size()},
+            {"passed", std::all_of(results.begin(), results.end(), 
+                [](const DistanceResult& r) { return r.passed; })}
+        };
+        
+        sendJsonResponse(res, 200, response);
+        
     } catch (const json::exception& e) {
         sendErrorResponse(res, 400, std::string("Invalid JSON: ") + e.what());
+    } catch (const std::exception& e) {
+        sendErrorResponse(res, 500, std::string("Distance test failed: ") + e.what());
     }
 }
 
 // Overcurrent test endpoint
 void HTTPServer::handleOvercurrentRun(const httplib::Request& req, httplib::Response& res) {
+    if (!overcurrentTester_) {
+        sendErrorResponse(res, 503, "Overcurrent tester not initialized");
+        return;
+    }
+    
+    if (!svManager_) {
+        sendErrorResponse(res, 503, "SV publisher manager not initialized");
+        return;
+    }
+    
     try {
         json body = json::parse(req.body);
         
-        // TODO: Start overcurrent test
+        // Parse overcurrent settings
+        OCTestConfig config;
         
-        sendJsonResponse(res, 200, {{"message", "Overcurrent test started"}});
+        if (body.contains("settings")) {
+            auto settings = body["settings"];
+            config.settings.pickupCurrent = settings.value("pickupCurrent", 100.0);
+            config.settings.TMS = settings.value("TMS", 0.1);
+            config.settings.curve = overcurrentTester_->parseCurve(settings.value("curve", "STANDARD_INVERSE"));
+        }
+        
+        // Parse test points
+        if (body.contains("points") && body["points"].is_array()) {
+            for (const auto& pt : body["points"]) {
+                OCPoint point;
+                point.currentMultiple = pt.value("currentMultiple", 2.0);
+                point.expectedTime = pt.value("expectedTime", 0.0);
+                point.label = pt.value("label", "");
+                config.points.push_back(point);
+            }
+        }
+        
+        // Parse tolerance
+        config.timeTolerance = body.value("timeTolerance", 5.0);
+        config.toleranceIsPercent = body.value("toleranceIsPercent", true);
+        config.maxTestDuration = body.value("maxTestDuration", 60.0);
+        config.stopOnFirstFailure = body.value("stopOnFirstFailure", false);
+        config.streamId = body.value("streamId", "");
+        
+        // Set up callbacks
+        overcurrentTester_->setTripFlagGetter([]() {
+            return vts::isTripFlagSet();
+        });
+        
+        overcurrentTester_->setCurrentSetter([this, config](double current) {
+            if (config.streamId.empty()) return;
+            
+            json update = {
+                {"current", {
+                    {"A", {{"magnitude", current}}},
+                    {"B", {{"magnitude", current}}},
+                    {"C", {{"magnitude", current}}}
+                }}
+            };
+            
+            svManager_->updateStream(config.streamId, update);
+        });
+        
+        // Run the overcurrent test
+        auto results = overcurrentTester_->run(config);
+        
+        // Format results
+        json resultsJson = json::array();
+        for (const auto& result : results) {
+            resultsJson.push_back({
+                {"currentMultiple", result.currentMultiple},
+                {"actualCurrent", result.actualCurrent},
+                {"expectedTime", result.expectedTime},
+                {"measuredTime", result.measuredTime},
+                {"tripped", result.tripped},
+                {"passed", result.passed},
+                {"error", result.error}
+            });
+        }
+        
+        json response = {
+            {"results", resultsJson},
+            {"totalPoints", results.size()},
+            {"passed", std::all_of(results.begin(), results.end(), 
+                [](const OCResult& r) { return r.passed; })},
+            {"settings", {
+                {"pickupCurrent", config.settings.pickupCurrent},
+                {"TMS", config.settings.TMS},
+                {"curve", overcurrentTester_->curveToString(config.settings.curve)}
+            }}
+        };
+        
+        sendJsonResponse(res, 200, response);
+        
     } catch (const json::exception& e) {
         sendErrorResponse(res, 400, std::string("Invalid JSON: ") + e.what());
+    } catch (const std::exception& e) {
+        sendErrorResponse(res, 500, std::string("Overcurrent test failed: ") + e.what());
     }
 }
 
 // Differential test endpoint
 void HTTPServer::handleDifferentialRun(const httplib::Request& req, httplib::Response& res) {
+    if (!differentialTester_) {
+        sendErrorResponse(res, 503, "Differential tester not initialized");
+        return;
+    }
+    
+    if (!svManager_) {
+        sendErrorResponse(res, 503, "SV publisher manager not initialized");
+        return;
+    }
+    
     try {
         json body = json::parse(req.body);
         
-        // TODO: Start differential test
+        // Parse differential test configuration
+        DifferentialTestConfig config;
         
-        sendJsonResponse(res, 200, {{"message", "Differential test started"}});
+        // Parse test points
+        if (body.contains("points") && body["points"].is_array()) {
+            for (const auto& pt : body["points"]) {
+                DifferentialPoint point;
+                point.Ir = pt.value("Ir", 0.0);
+                point.Id = pt.value("Id", 0.0);
+                point.expectedTime = pt.value("expectedTime", 0.0);
+                point.label = pt.value("label", "");
+                config.points.push_back(point);
+            }
+        }
+        
+        // Parse configuration
+        config.timeTolerance = body.value("timeTolerance", 0.05);
+        config.maxTestDuration = body.value("maxTestDuration", 5.0);
+        config.stopOnFirstFailure = body.value("stopOnFirstFailure", false);
+        config.stream1Id = body.value("stream1Id", "");
+        config.stream2Id = body.value("stream2Id", "");
+        
+        // Set up callbacks
+        differentialTester_->setTripFlagGetter([]() {
+            return vts::isTripFlagSet();
+        });
+        
+        differentialTester_->setSide1CurrentSetter([this, config](double current) {
+            if (config.stream1Id.empty()) return;
+            
+            json update = {
+                {"current", {
+                    {"A", {{"magnitude", current}}},
+                    {"B", {{"magnitude", current}}},
+                    {"C", {{"magnitude", current}}}
+                }}
+            };
+            
+            svManager_->updateStream(config.stream1Id, update);
+        });
+        
+        differentialTester_->setSide2CurrentSetter([this, config](double current) {
+            if (config.stream2Id.empty()) return;
+            
+            json update = {
+                {"current", {
+                    {"A", {{"magnitude", current}}},
+                    {"B", {{"magnitude", current}}},
+                    {"C", {{"magnitude", current}}}
+                }}
+            };
+            
+            svManager_->updateStream(config.stream2Id, update);
+        });
+        
+        // Run the differential test
+        auto results = differentialTester_->run(config);
+        
+        // Format results
+        json resultsJson = json::array();
+        for (const auto& result : results) {
+            resultsJson.push_back({
+                {"Ir", result.Ir},
+                {"Id", result.Id},
+                {"Is1", result.Is1},
+                {"Is2", result.Is2},
+                {"expectedTime", result.expectedTime},
+                {"tripTime", result.tripTime},
+                {"tripped", result.tripped},
+                {"passed", result.passed},
+                {"error", result.error}
+            });
+        }
+        
+        json response = {
+            {"results", resultsJson},
+            {"totalPoints", results.size()},
+            {"passed", std::all_of(results.begin(), results.end(), 
+                [](const DifferentialResult& r) { return r.passed; })}
+        };
+        
+        sendJsonResponse(res, 200, response);
+        
     } catch (const json::exception& e) {
         sendErrorResponse(res, 400, std::string("Invalid JSON: ") + e.what());
+    } catch (const std::exception& e) {
+        sendErrorResponse(res, 500, std::string("Differential test failed: ") + e.what());
     }
 }
 

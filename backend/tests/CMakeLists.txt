@@ -28,6 +28,12 @@ add_executable(vts_tests
     test_smpCnt_wrap.cpp
     test_comtrade_parser.cpp
     test_trip_rule_evaluator.cpp
+    test_sequence_engine.cpp
+    test_impedance_calculator.cpp
+    test_ramping_tester.cpp
+    test_overcurrent_tester.cpp
+    # test_distance_tester.cpp - TODO: Create tests for distance tester
+    # test_differential_tester.cpp - TODO: Create tests for differential tester
     # test_threadpool.cpp - TODO: Adapt to ThreadPool's submit() API with function arguments
     test_main.cpp
 )
@@ -40,6 +46,9 @@ target_link_libraries(vts_tests
     platform
     vts_io
     sniffer
+    sequence
+    goose
+    vts_testers
 )
 
 target_include_directories(vts_tests PRIVATE
@@ -48,6 +57,10 @@ target_include_directories(vts_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/platform/include
     ${CMAKE_SOURCE_DIR}/src/io/include
     ${CMAKE_SOURCE_DIR}/src/sniffer/include
+    ${CMAKE_SOURCE_DIR}/src/sequence/include
+    ${CMAKE_SOURCE_DIR}/src/goose/include
+    ${CMAKE_SOURCE_DIR}/src/core/include
+    ${CMAKE_SOURCE_DIR}/src/testers/include
 )
 
 # Discover and register tests

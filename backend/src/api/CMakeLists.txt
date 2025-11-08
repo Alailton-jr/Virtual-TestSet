@@ -15,6 +15,9 @@ target_include_directories( ${PROJECT_NAME}
         ${CMAKE_SOURCE_DIR}/third_party/cpp-httplib
         ${CMAKE_SOURCE_DIR}/third_party/json/include
         ${CMAKE_SOURCE_DIR}/src/core/include
+        ${CMAKE_SOURCE_DIR}/src/sequence/include
+        ${CMAKE_SOURCE_DIR}/src/analyzer/include
+        ${CMAKE_SOURCE_DIR}/src/testers/include
 )
 
 # Disable strict warnings for third-party code (websocketpp/asio)
@@ -34,5 +37,8 @@ target_link_libraries(${PROJECT_NAME}
         vts_core
     PRIVATE
         tools
+        sequence
+        vts_analyzer
+        vts_testers
         Threads::Threads
 )

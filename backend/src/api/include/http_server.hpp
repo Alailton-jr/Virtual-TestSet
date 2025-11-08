@@ -12,9 +12,23 @@ using json = nlohmann::json;
 
 // Forward declarations
 class SVPublisherManager;
-class SequenceEngine;
 class GooseSubscriber;
-class AnalyzerEngine;
+
+namespace vts {
+namespace testers {
+    class ImpedanceCalculator;
+    class RampingTester;
+    class DistanceTester;
+    class OvercurrentTester;
+    class DifferentialTester;
+}
+namespace analyzer {
+    class AnalyzerEngine;
+}
+namespace sequence {
+    class SequenceEngine;
+}
+}
 
 class HTTPServer {
 public:
@@ -28,10 +42,17 @@ public:
 
     // Set component references
     void setSVPublisherManager(std::shared_ptr<SVPublisherManager> manager);
-    void setSequenceEngine(std::shared_ptr<SequenceEngine> engine);
+    void setSequenceEngine(std::shared_ptr<vts::sequence::SequenceEngine> engine);
     void setGooseSubscriber(std::shared_ptr<GooseSubscriber> subscriber);
-    void setAnalyzerEngine(std::shared_ptr<AnalyzerEngine> analyzer);
+    void setAnalyzerEngine(std::shared_ptr<vts::analyzer::AnalyzerEngine> analyzer);
     void setWSServer(class WSServer* wsServer);
+    
+    // Set tester component references
+    void setImpedanceCalculator(std::shared_ptr<vts::testers::ImpedanceCalculator> calculator);
+    void setRampingTester(std::shared_ptr<vts::testers::RampingTester> tester);
+    void setDistanceTester(std::shared_ptr<vts::testers::DistanceTester> tester);
+    void setOvercurrentTester(std::shared_ptr<vts::testers::OvercurrentTester> tester);
+    void setDifferentialTester(std::shared_ptr<vts::testers::DifferentialTester> tester);
 
 private:
     // Setup route handlers
@@ -58,6 +79,9 @@ private:
     // Sequence endpoints (Module 3)
     void handleSequenceRun(const httplib::Request& req, httplib::Response& res);
     void handleSequenceStop(const httplib::Request& req, httplib::Response& res);
+    void handleSequenceStatus(const httplib::Request& req, httplib::Response& res);
+    void handleSequencePause(const httplib::Request& req, httplib::Response& res);
+    void handleSequenceResume(const httplib::Request& req, httplib::Response& res);
     
     // GOOSE endpoints (Module 4)
     void handleGooseScan(const httplib::Request& req, httplib::Response& res);
@@ -65,6 +89,8 @@ private:
     
     // Analyzer endpoints (Module 5)
     void handleAnalyzerSelect(const httplib::Request& req, httplib::Response& res);
+    void handleAnalyzerStop(const httplib::Request& req, httplib::Response& res);
+    void handleAnalyzerStatus(const httplib::Request& req, httplib::Response& res);
     
     // Impedance injection endpoints (Module 6)
     void handleImpedanceApply(const httplib::Request& req, httplib::Response& res);
@@ -93,10 +119,17 @@ private:
     
     // Component references
     std::shared_ptr<SVPublisherManager> svManager_;
-    std::shared_ptr<SequenceEngine> sequenceEngine_;
+    std::shared_ptr<vts::sequence::SequenceEngine> sequenceEngine_;
     std::shared_ptr<GooseSubscriber> gooseSubscriber_;
-    std::shared_ptr<AnalyzerEngine> analyzerEngine_;
+    std::shared_ptr<vts::analyzer::AnalyzerEngine> analyzerEngine_;
     class WSServer* wsServer_;
+    
+    // Tester component references
+    std::shared_ptr<vts::testers::ImpedanceCalculator> impedanceCalculator_;
+    std::shared_ptr<vts::testers::RampingTester> rampingTester_;
+    std::shared_ptr<vts::testers::DistanceTester> distanceTester_;
+    std::shared_ptr<vts::testers::OvercurrentTester> overcurrentTester_;
+    std::shared_ptr<vts::testers::DifferentialTester> differentialTester_;
 };
 
 #endif // HTTP_SERVER_HPP

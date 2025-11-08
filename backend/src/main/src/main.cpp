@@ -16,6 +16,8 @@
 #include "http_server.hpp"
 #include "ws_server.hpp"
 #include "sv_publisher_manager.hpp"
+#include "sequence_engine.hpp"
+#include "analyzer_engine.hpp"
 #include <time.h>
 #include <filesystem>
 #include <stdexcept>
@@ -863,17 +865,116 @@ int main(int argc, char* argv[]){
     LOG_INFO("HTTP", "Initializing HTTP API server and SV Publisher Manager...");
     auto svManager = std::make_shared<SVPublisherManager>();
     
+    // Initialize Sequence Engine
+    LOG_INFO("SEQ", "Initializing Sequence Engine...");
+    auto sequenceEngine = std::make_shared<vts::sequence::SequenceEngine>();
+    
+    // Initialize Analyzer Engine
+    LOG_INFO("ANALYZER", "Initializing Analyzer Engine...");
+    auto analyzerEngine = std::make_shared<vts::analyzer::AnalyzerEngine>();
+    
+    // Initialize Sniffer for network packet capture
+    LOG_INFO("SNIFFER", "Initializing network packet sniffer...");
+    auto sniffer = std::make_shared<SnifferClass>();
+    
     HTTPServer httpServer(8081);  // Use different port than TCP server
     httpServer.setSVPublisherManager(svManager);
+    httpServer.setSequenceEngine(sequenceEngine);
+    httpServer.setAnalyzerEngine(analyzerEngine);
     
     // Initialize WebSocket server
     LOG_INFO("WS", "Initializing WebSocket server...");
-    WSServer wsServer(8082);  // WebSocket on port 8082
-    httpServer.setWSServer(&wsServer);
+    auto wsServer = std::make_shared<WSServer>(8082);  // WebSocket on port 8082
+    httpServer.setWSServer(wsServer.get());
+    
+    // Wire sequence engine callbacks
+    sequenceEngine->setProgressCallback([wsServer](size_t currentState, size_t totalStates,
+                                                     const std::string& stateName, double elapsed,
+                                                     const std::string& message) {
+        nlohmann::json progress;
+        progress["type"] = "sequenceProgress";
+        progress["currentState"] = currentState;
+        progress["totalStates"] = totalStates;
+        progress["stateName"] = stateName;
+        progress["elapsed"] = elapsed;
+        progress["message"] = message;
+        
+        wsServer->broadcast(Topic::SEQUENCE_PROGRESS, progress);
+    });
+    
+    sequenceEngine->setPhasorUpdateCallback([svManager](const std::string& streamId,
+                                                         const vts::sequence::StreamPhasorState& state) {
+        // Convert sequence phasor state to SV manager format
+        std::map<std::string, std::pair<double, double>> channels;
+        for (const auto& [channelId, phasor] : state.channels) {
+            channels[channelId] = std::make_pair(phasor.mag, phasor.angleDeg);
+        }
+        
+        svManager->updateStreamPhasors(streamId, state.freq, channels);
+    });
+    
+    // Wire analyzer engine callbacks
+    analyzerEngine->setAnalysisCallback([wsServer](const vts::analyzer::AnalysisFrame& frame) {
+        nlohmann::json analysisData;
+        analysisData["timestamp"] = std::chrono::duration_cast<std::chrono::milliseconds>(
+            frame.timestamp.time_since_epoch()).count();
+        analysisData["streamId"] = frame.streamId;
+        analysisData["sampleRate"] = frame.sampleRate;
+        analysisData["samplesPerCycle"] = frame.samplesPerCycle;
+        
+        nlohmann::json channels = nlohmann::json::array();
+        for (const auto& ch : frame.channels) {
+            nlohmann::json channelData;
+            channelData["name"] = ch.channelName;
+            channelData["fundamental"] = {
+                {"magnitude", ch.fundamental.magnitude},
+                {"angleDeg", ch.fundamental.angleDeg},
+                {"frequency", ch.fundamental.frequency}
+            };
+            
+            nlohmann::json harmonics = nlohmann::json::array();
+            for (const auto& h : ch.harmonics) {
+                harmonics.push_back({
+                    {"order", h.order},
+                    {"magnitude", h.magnitude},
+                    {"angleDeg", h.angleDeg}
+                });
+            }
+            channelData["harmonics"] = harmonics;
+            channelData["rms"] = ch.rms;
+            channelData["thd"] = ch.thd;
+            
+            channels.push_back(channelData);
+        }
+        analysisData["channels"] = channels;
+        
+        wsServer->broadcast(Topic::ANALYZER_PHASORS, analysisData);
+    });
+    
+    analyzerEngine->setWaveformCallback([wsServer](const std::vector<vts::analyzer::WaveformData>& waveforms) {
+        nlohmann::json waveformData = nlohmann::json::array();
+        
+        for (const auto& wf : waveforms) {
+            nlohmann::json channel;
+            channel["name"] = wf.channelName;
+            channel["sampleRate"] = wf.sampleRate;
+            channel["samples"] = wf.samples;
+            channel["timestamps"] = wf.timestamps;
+            waveformData.push_back(channel);
+        }
+        
+        wsServer->broadcast(Topic::ANALYZER_WAVEFORMS, waveformData);
+    });
+    
+    // Wire analyzer to sniffer for live SV stream processing
+    sniffer->setAnalyzerEngine(analyzerEngine);
+    sniffer->setWebSocketServer(wsServer);
+    
+    LOG_INFO("SNIFFER", "Analyzer engine wired to sniffer for live SV processing");
     
     // Start both servers
     httpServer.start();
-    wsServer.start();
+    wsServer->start();
     
     LOG_INFO("HTTP", "HTTP API server running on port 8081");
     LOG_INFO("WS", "WebSocket server running on port 8082");
@@ -891,7 +992,7 @@ int main(int argc, char* argv[]){
     }
     
     // Cleanup (unreachable in current implementation - would need signal handler)
-    wsServer.stop();
+    wsServer->stop();
     httpServer.stop();
     Metrics::printSummary();
     Logger::shutdown();

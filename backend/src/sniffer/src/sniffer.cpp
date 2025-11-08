@@ -1,6 +1,7 @@
 
 
 #include "sniffer.hpp"
+#include "analyzer_engine.hpp"
 #include "rt_utils.hpp"
 #include "logger.hpp"
 #include "metrics.hpp"
@@ -228,6 +229,160 @@ void process_GOOSE_packet(uint8_t* frame, ssize_t frameSize, int i, SnifferClass
     // std::cout << "GOOSE Received: "<< (boolDat[0] != 0) << std::endl;
 }
 
+void process_SV_packet(uint8_t* frame, ssize_t frameSize, int i, SnifferClass* sniffer) {
+    // Check if analyzer is available
+    auto analyzer = sniffer->analyzerEngine.lock();
+    if (!analyzer || !analyzer->isRunning()) {
+        return;  // Analyzer not running, skip processing
+    }
+    
+    // Extract source MAC address
+    char macStr[18];
+    snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+             frame[6], frame[7], frame[8], frame[9], frame[10], frame[11]);
+    std::string streamMac(macStr);
+    
+    // Check if this is the stream we're analyzing
+    if (streamMac != analyzer->getStreamMac()) {
+        return;  // Not the target stream
+    }
+    
+    // Validate minimum SV packet size
+    if (i + 8 > frameSize) {
+        LOG_ERROR("SV", "Truncated SV header (frameSize=%zd, position=%d)", frameSize, i);
+        return;
+    }
+    
+    // Skip to SAVPDU (0x60)
+    i += 8;  // Skip AppID (2) + Length (2) + Reserved1 (2) + Reserved2 (2)
+    
+    if (i >= frameSize || frame[i] != 0x60) {
+        LOG_ERROR("SV", "Invalid SAVPDU tag (expected 0x60, got 0x%02X)", frame[i]);
+        return;
+    }
+    
+    i++;  // Skip tag
+    
+    // Parse SAVPDU length
+    int savpduLength = 0;
+    if (i >= frameSize) return;
+    
+    if (frame[i] == 0x82) {
+        if (i + 3 > frameSize) return;
+        savpduLength = (frame[i+1] << 8) | frame[i+2];
+        i += 3;
+    } else if (frame[i] == 0x81) {
+        if (i + 2 > frameSize) return;
+        savpduLength = frame[i+1];
+        i += 2;
+    } else {
+        savpduLength = frame[i];
+        i++;
+    }
+    
+    if (i + savpduLength > frameSize) {
+        LOG_ERROR("SV", "SAVPDU length exceeds frame size");
+        return;
+    }
+    
+    // Parse noASDU (0x80)
+    if (i >= frameSize || frame[i] != 0x80) return;
+    i++;
+    if (i >= frameSize) return;
+    int noAsdu = frame[i];
+    i++;
+    
+    // Skip security if present (0x81)
+    if (i < frameSize && frame[i] == 0x81) {
+        i++; // tag
+        if (i >= frameSize) return;
+        int secLen = frame[i];
+        i += 1 + secLen;
+    }
+    
+    // Process each ASDU
+    for (int asduIdx = 0; asduIdx < noAsdu && i < frameSize; asduIdx++) {
+        // Parse ASDU (0x30)
+        if (i >= frameSize || frame[i] != 0x30) break;
+        i++;
+        
+        // Parse ASDU length
+        if (i >= frameSize) break;
+        int asduLen = 0;
+        if (frame[i] == 0x82) {
+            if (i + 3 > frameSize) break;
+            asduLen = (frame[i+1] << 8) | frame[i+2];
+            i += 3;
+        } else if (frame[i] == 0x81) {
+            if (i + 2 > frameSize) break;
+            asduLen = frame[i+1];
+            i += 2;
+        } else {
+            asduLen = frame[i];
+            i++;
+        }
+        
+        int asduEnd = i + asduLen;
+        
+        // Parse ASDU fields to find seqData
+        while (i < asduEnd && i < frameSize) {
+            uint8_t tag = frame[i++];
+            if (i >= frameSize) break;
+            
+            int fieldLen = 0;
+            if (frame[i] == 0x82) {
+                if (i + 3 > frameSize) break;
+                fieldLen = (frame[i+1] << 8) | frame[i+2];
+                i += 3;
+            } else if (frame[i] == 0x81) {
+                if (i + 2 > frameSize) break;
+                fieldLen = frame[i+1];
+                i += 2;
+            } else {
+                fieldLen = frame[i];
+                i++;
+            }
+            
+            if (tag == 0x87) {
+                // This is seqData - contains the actual sample values
+                // Each sample is typically 4 or 8 bytes (int32 or int64)
+                int numSamples = fieldLen / 8;  // Assuming 8-byte samples (int32 value + int32 quality)
+                
+                auto timestamp = std::chrono::steady_clock::now();
+                
+                for (int sampleIdx = 0; sampleIdx < numSamples && i + 8 <= frameSize; sampleIdx++) {
+                    // Parse Int32 value (4 bytes, big-endian)
+                    int32_t rawValue = static_cast<int32_t>(
+                        (static_cast<uint32_t>(frame[i]) << 24) |
+                        (static_cast<uint32_t>(frame[i+1]) << 16) |
+                        (static_cast<uint32_t>(frame[i+2]) << 8) |
+                        static_cast<uint32_t>(frame[i+3])
+                    );
+                    
+                    // Skip quality (4 bytes)
+                    i += 8;
+                    
+                    // Convert to floating point (assuming some scaling factor)
+                    // Typical IEC 61850-9-2 scaling: value / 100 for voltage/current
+                    double value = static_cast<double>(rawValue) / 100.0;
+                    
+                    // Generate channel name (e.g., "Ch0", "Ch1", etc.)
+                    char channelName[16];
+                    snprintf(channelName, sizeof(channelName), "Ch%d", sampleIdx);
+                    
+                    // Send to analyzer
+                    analyzer->processSample(streamMac, std::string(channelName), value, timestamp);
+                }
+                
+                break;  // Found seqData, done with this ASDU
+            } else {
+                // Skip other fields
+                i += fieldLen;
+            }
+        }
+    }
+}
+
 void process_pkt(task_arg* arg) {
 
     // Todo: Chech for PRP Packets, do not duplicate the data from them
@@ -258,7 +413,7 @@ void process_pkt(task_arg* arg) {
     int i = (frame[12] == 0x81 && frame[13] == 0x00) ? 16 : 12; // Skip Ethernet and vLAN
 
     if ((frame[i] == 0x88 && frame[i+1] == 0xba)){ // Check if packet is SV
-        // process_SV_packet(frame, frameSize, sv, i);
+        process_SV_packet(frame, frameSize, i, sniffer);
         return;
     }else if ((frame[i] == 0x88 && frame[i+1] == 0xb8)){
         process_GOOSE_packet(frame, frameSize, i, sniffer);
