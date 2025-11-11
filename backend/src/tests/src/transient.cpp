@@ -266,7 +266,7 @@ transient_plan create_plan(transient_config* conf, std::vector<std::vector<int32
     plan.digital_input = conf->digital_input;
 
     plan.timedStart = static_cast<int32_t>(conf->timed_start);
-    plan.start_time.tv_sec = static_cast<__darwin_time_t>(conf->start_time / 1e9);
+    plan.start_time.tv_sec = static_cast<time_t>(conf->start_time / 1e9);
     plan.start_time.tv_nsec = static_cast<long>(conf->start_time - static_cast<double>(plan.start_time.tv_sec) * 1e9);
 
     if (plan.loop_flag){

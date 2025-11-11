@@ -14,6 +14,7 @@ import DistanceTestPage from '@/pages/DistanceTestPage'
 import OvercurrentTestPage from '@/pages/OvercurrentTestPage'
 import DifferentialTestPage from '@/pages/DifferentialTestPage'
 import SettingsPage from '@/pages/SettingsPage'
+import BackendLogsPage from '@/pages/BackendLogsPage'
 import './App.css'
 
 function App() {
@@ -35,6 +36,7 @@ function App() {
             <Route path="/overcurrent" element={<OvercurrentTestPage />} />
             <Route path="/differential" element={<DifferentialTestPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/logs" element={<BackendLogsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AppLayout>

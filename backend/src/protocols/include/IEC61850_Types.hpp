@@ -193,102 +193,102 @@ public:
                 encoded.push_back(boolean.value() ? 0xFF : 0x00);
                 break;
             case Type::BitString:
-                if (!bitString.has_value()) break;
+                if (!this->bitString.has_value()) break;
                 encoded.push_back(0x84);
-                encoded.push_back(static_cast<uint8_t>(bitString.value().size()));
-                encoded.insert(encoded.end(), bitString.value().begin(), bitString.value().end());
+                encoded.push_back(static_cast<uint8_t>(this->bitString.value().size()));
+                encoded.insert(encoded.end(), this->bitString.value().begin(), this->bitString.value().end());
                 break;
             case Type::Integer:
-                if (!integer.has_value()) break;
+                if (!this->integer.has_value()) break;
                 encoded.push_back(0x85);
                 encoded.push_back(4);
-                encoded.push_back((integer.value() >> 24) & 0xFF);
-                encoded.push_back((integer.value() >> 16) & 0xFF);
-                encoded.push_back((integer.value() >> 8) & 0xFF);
-                encoded.push_back(integer.value() & 0xFF);
+                encoded.push_back((this->integer.value() >> 24) & 0xFF);
+                encoded.push_back((this->integer.value() >> 16) & 0xFF);
+                encoded.push_back((this->integer.value() >> 8) & 0xFF);
+                encoded.push_back(this->integer.value() & 0xFF);
                 break;
             case Type::Unsigned:
-                if (!unsignedInt.has_value()) break;
+                if (!this->unsignedInt.has_value()) break;
                 encoded.push_back(0x86);
                 encoded.push_back(4);
-                encoded.push_back((unsignedInt.value() >> 24) & 0xFF);
-                encoded.push_back((unsignedInt.value() >> 16) & 0xFF);
-                encoded.push_back((unsignedInt.value() >> 8) & 0xFF);
-                encoded.push_back(unsignedInt.value() & 0xFF);
+                encoded.push_back((this->unsignedInt.value() >> 24) & 0xFF);
+                encoded.push_back((this->unsignedInt.value() >> 16) & 0xFF);
+                encoded.push_back((this->unsignedInt.value() >> 8) & 0xFF);
+                encoded.push_back(this->unsignedInt.value() & 0xFF);
                 break;
             case Type::FloatingPoint:
-                if (!floatingPoint.has_value()) break;
+                if (!this->floatingPoint.has_value()) break;
                 encoded.push_back(0x87);
                 {
-                    std::vector<uint8_t> fpEncoded = floatingPoint.value().getEncoded();
+                    std::vector<uint8_t> fpEncoded = this->floatingPoint.value().getEncoded();
                     encoded.push_back(static_cast<uint8_t>(fpEncoded.size()));
                     encoded.insert(encoded.end(), fpEncoded.begin(), fpEncoded.end());
                 }
                 break;
             case Type::Real:
                 // IEC 61850-7-2: Real is encoded as 64-bit IEEE 754 double (8 bytes)
-                if (!real.has_value()) break;
+                if (!this->real.has_value()) break;
                 encoded.push_back(0x88);
                 encoded.push_back(8);  // Length: 8 bytes for double
                 {
                     std::vector<uint8_t> realEncoded(8);  // Changed from 4 to 8
-                    memcpy(realEncoded.data(), &real.value(), 8);  // Copy full 8 bytes
+                    memcpy(realEncoded.data(), &this->real.value(), 8);  // Copy full 8 bytes
                     encoded.insert(encoded.end(), realEncoded.begin(), realEncoded.end());
                 }
                 break;
             case Type::OctetString:
-                if (!octetString.has_value()) break;
+                if (!this->octetString.has_value()) break;
                 encoded.push_back(0x89);
-                encoded.push_back(static_cast<uint8_t>(octetString.value().size()));
-                encoded.insert(encoded.end(), octetString.value().begin(), octetString.value().end());
+                encoded.push_back(static_cast<uint8_t>(this->octetString.value().size()));
+                encoded.insert(encoded.end(), this->octetString.value().begin(), this->octetString.value().end());
                 break;
             case Type::VisibleString:
-                if (!visibleString.has_value()) break;
+                if (!this->visibleString.has_value()) break;
                 encoded.push_back(0x8A);
-                encoded.push_back(static_cast<uint8_t>(visibleString.value().size()));
-                encoded.insert(encoded.end(), visibleString.value().begin(), visibleString.value().end());
+                encoded.push_back(static_cast<uint8_t>(this->visibleString.value().size()));
+                encoded.insert(encoded.end(), this->visibleString.value().begin(), this->visibleString.value().end());
                 break;
             case Type::BinaryTime:
-                if (!binaryTime.has_value()) break;
+                if (!this->binaryTime.has_value()) break;
                 encoded.push_back(0x8B);
                 {
-                    std::vector<uint8_t> btEncoded = binaryTime.value().getEncoded();
+                    std::vector<uint8_t> btEncoded = this->binaryTime.value().getEncoded();
                     encoded.push_back(static_cast<uint8_t>(btEncoded.size()));
                     encoded.insert(encoded.end(), btEncoded.begin(), btEncoded.end());
                 }
                 break;
             case Type::Bcd:
-                if (!bcd.has_value()) break;
+                if (!this->bcd.has_value()) break;
                 encoded.push_back(0x8C);
                 encoded.push_back(4);
-                encoded.push_back((bcd.value() >> 24) & 0xFF);
-                encoded.push_back((bcd.value() >> 16) & 0xFF);
-                encoded.push_back((bcd.value() >> 8) & 0xFF);
-                encoded.push_back(bcd.value() & 0xFF);
+                encoded.push_back((this->bcd.value() >> 24) & 0xFF);
+                encoded.push_back((this->bcd.value() >> 16) & 0xFF);
+                encoded.push_back((this->bcd.value() >> 8) & 0xFF);
+                encoded.push_back(this->bcd.value() & 0xFF);
                 break;
             case Type::BooleanArray:
-                if (!booleanArray.has_value()) break;
+                if (!this->booleanArray.has_value()) break;
                 encoded.push_back(0x8D);
-                encoded.push_back(static_cast<uint8_t>(booleanArray.value().size()));
-                encoded.insert(encoded.end(), booleanArray.value().begin(), booleanArray.value().end());
+                encoded.push_back(static_cast<uint8_t>(this->booleanArray.value().size()));
+                encoded.insert(encoded.end(), this->booleanArray.value().begin(), this->booleanArray.value().end());
                 break;
             case Type::ObjId:
-                if (!objId.has_value()) break;
+                if (!this->objId.has_value()) break;
                 encoded.push_back(0x8E);
-                encoded.push_back(static_cast<uint8_t>(objId.value().size()));
-                encoded.insert(encoded.end(), objId.value().begin(), objId.value().end());
+                encoded.push_back(static_cast<uint8_t>(this->objId.value().size()));
+                encoded.insert(encoded.end(), this->objId.value().begin(), this->objId.value().end());
                 break;
             case Type::MmsString:
-                if (!mmsString.has_value()) break;
+                if (!this->mmsString.has_value()) break;
                 encoded.push_back(0x8F);
-                encoded.push_back(static_cast<uint8_t>(mmsString.value().size()));
-                encoded.insert(encoded.end(), mmsString.value().begin(), mmsString.value().end());
+                encoded.push_back(static_cast<uint8_t>(this->mmsString.value().size()));
+                encoded.insert(encoded.end(), this->mmsString.value().begin(), this->mmsString.value().end());
                 break;
             case Type::UtcTime:
-                if (!utcTime.has_value()) break;
+                if (!this->utcTime.has_value()) break;
                 encoded.push_back(0x90);
                 {
-                    std::vector<uint8_t> utcEncoded = utcTime.value().getEncoded();
+                    std::vector<uint8_t> utcEncoded = this->utcTime.value().getEncoded();
                     encoded.push_back(static_cast<uint8_t>(utcEncoded.size()));
                     encoded.insert(encoded.end(), utcEncoded.begin(), utcEncoded.end());
                 }

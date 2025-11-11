@@ -2,6 +2,9 @@
 #include <ifaddrs.h>
 #include <arpa/inet.h>
 #include <linux/sockios.h>
+#include <linux/if_packet.h>
+#include <linux/net_tstamp.h>
+#include <net/if.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include <iomanip>
@@ -15,6 +18,7 @@
 #include <cerrno>
 #include <iostream>
 #include <sys/types.h>
+#include "general_definition.hpp"
 
 #ifdef __linux__
 class RawSocket{
@@ -92,7 +96,8 @@ private:
         msg_hdr.msg_iovlen = 1;
         msg_hdr.msg_control = NULL;
         msg_hdr.msg_controllen = 0;
-#endif
+    }
+};
 #else
 class RawSocket{
 public:
@@ -114,13 +119,11 @@ private:
         // No-op on non-Linux
     }
 };
-};
+#endif
 
 
-
-
+inline const std::string GetMACAddress([[maybe_unused]] const char* interface) {
 #ifdef __linux__
-inline const std::string GetMACAddress(const char* interface) {
     struct ifaddrs *ifaddr, *ifa;
     unsigned char *mac;
     std::ostringstream macAddressStream;
@@ -141,8 +144,10 @@ inline const std::string GetMACAddress(const char* interface) {
     }
     freeifaddrs(ifaddr);
     return macAddressStream.str();
-}
+#else
+    return "";
 #endif
+}
 
 
 #endif // RAW_SOCKET_HPP

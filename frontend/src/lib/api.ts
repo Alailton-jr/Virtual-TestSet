@@ -394,8 +394,33 @@ class ApiClient {
   // Health Check
   // ============================================================================
 
-  async healthCheck(): Promise<{ status: string; timestamp: string }> {
-    return this.request<{ status: string; timestamp: string }>('/health')
+  async healthCheck(): Promise<{ status: string; timestamp: number; version: string }> {
+    return this.request<{ status: string; timestamp: number; version: string }>('/health')
+  }
+
+  // ============================================================================
+  // System Status
+  // ============================================================================
+
+  async getSequenceStatus(): Promise<{ running: boolean; currentStep?: number; totalSteps?: number }> {
+    return this.request('/sequences/status')
+  }
+
+  async getAnalyzerStatus(): Promise<{ active: boolean; streamId?: string }> {
+    return this.request('/analyzer/status')
+  }
+
+  // ============================================================================
+  // Backend Logs
+  // ============================================================================
+
+  async getBackendLogs(limit: number = 100): Promise<{ logs: Array<{ timestamp: string; level: string; message: string }> }> {
+    return this.request(`/logs?limit=${limit}`)
+  }
+
+  getLogsWebSocket(): WebSocket {
+    const wsUrl = this.baseUrl.replace(/^http/, 'ws').replace(/\/api\/v1$/, '/ws/logs')
+    return new WebSocket(wsUrl)
   }
 }
 

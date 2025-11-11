@@ -5,6 +5,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
+  DialogOverlay,
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -160,7 +161,9 @@ export function StreamConfigDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogOverlay className="bg-black/20 dark:bg-black/20" /> 
+      <DialogContent className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100
+               border border-border max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{stream ? 'Edit Stream' : 'Create New Stream'}</DialogTitle>
           <DialogDescription>

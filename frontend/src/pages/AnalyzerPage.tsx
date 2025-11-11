@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Play, Square } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Play, Square, AlertCircle } from 'lucide-react'
 import { useStreamStore } from '@/stores/useStreamStore'
+import { api } from '@/lib/api'
 
 interface Phasor {
   channel: string
@@ -13,18 +15,76 @@ interface Phasor {
 }
 
 export default function AnalyzerPage() {
-  const { streams } = useStreamStore()
+  const { streams, fetchStreams } = useStreamStore()
   const [selectedStreamId, setSelectedStreamId] = useState<string>('')
   const [isCapturing, setIsCapturing] = useState(false)
-  const [phasors] = useState<Phasor[]>([
-    { channel: 'V-A', magnitude: 115.47, angle: 0.0 },
-    { channel: 'V-B', magnitude: 115.47, angle: -120.0 },
-    { channel: 'V-C', magnitude: 115.47, angle: 120.0 },
-    { channel: 'I-A', magnitude: 5.77, angle: -30.0 },
-  ])
+  const [phasors, setPhasors] = useState<Phasor[]>([])
+  const [error, setError] = useState<string>('')
 
-  const handleCapture = () => {
-    setIsCapturing(!isCapturing)
+  // Fetch streams on mount
+  useEffect(() => {
+    fetchStreams()
+  }, [fetchStreams])
+
+  // Clear error after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(''), 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [error])
+
+  // Poll for analyzer status and generate mock phasor data when capturing
+  // TODO: Replace with WebSocket connection for real-time data
+  useEffect(() => {
+    if (!isCapturing) {
+      setPhasors([])
+      return
+    }
+
+    // Generate realistic phasor data
+    const generatePhasors = () => {
+      setPhasors([
+        { channel: 'V-A', magnitude: 115.47 + (Math.random() - 0.5) * 2, angle: 0.0 + (Math.random() - 0.5) * 1 },
+        { channel: 'V-B', magnitude: 115.47 + (Math.random() - 0.5) * 2, angle: -120.0 + (Math.random() - 0.5) * 1 },
+        { channel: 'V-C', magnitude: 115.47 + (Math.random() - 0.5) * 2, angle: 120.0 + (Math.random() - 0.5) * 1 },
+        { channel: 'I-A', magnitude: 5.77 + (Math.random() - 0.5) * 0.5, angle: -30.0 + (Math.random() - 0.5) * 2 },
+        { channel: 'I-B', magnitude: 5.77 + (Math.random() - 0.5) * 0.5, angle: -150.0 + (Math.random() - 0.5) * 2 },
+        { channel: 'I-C', magnitude: 5.77 + (Math.random() - 0.5) * 0.5, angle: 90.0 + (Math.random() - 0.5) * 2 },
+      ])
+    }
+
+    generatePhasors()
+    const interval = setInterval(generatePhasors, 1000)
+
+    return () => clearInterval(interval)
+  }, [isCapturing])
+
+  const handleCapture = async () => {
+    if (!selectedStreamId) {
+      setError('Please select a stream')
+      return
+    }
+
+    if (isCapturing) {
+      // Stop capturing
+      try {
+        await api.stopAnalyzer()
+        setIsCapturing(false)
+        setError('')
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to stop analyzer')
+      }
+    } else {
+      // Start capturing
+      try {
+        await api.startAnalyzer(selectedStreamId)
+        setIsCapturing(true)
+        setError('')
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to start analyzer')
+      }
+    }
   }
 
   return (
@@ -35,6 +95,13 @@ export default function AnalyzerPage() {
           Real-time analysis of SV streams with oscilloscope and phasor visualization
         </p>
       </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardHeader>

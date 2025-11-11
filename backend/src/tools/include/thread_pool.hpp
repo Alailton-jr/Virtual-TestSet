@@ -1,6 +1,8 @@
 #ifndef THREAD_POOL_HPP
 #define THREAD_POOL_HPP
 
+#include "compat.hpp"
+#include "rt_utils.hpp"
 #include <iostream>
 #include <pthread.h>
 #include <stdexcept>
@@ -48,7 +50,7 @@ public:
      * 
      * @param no_threads Number of threads in the thread pool.
      * @param no_task Maximum number of tasks in the queue.
-     * @param priority Priority of threads (SCHED_FIFO).
+     * @param priority Priority of threads (Linux: SCHED_FIFO 1-99, Windows: mapped to thread priorities).
     */
     ThreadPool(int32_t no_threads, int32_t no_task, int32_t priority) 
         : stop(false), running(true), num_tasks(static_cast<size_t>(no_task)), front(0), rear(-1), count(0) {
@@ -61,9 +63,11 @@ public:
 
         // Threads Initialization
         threads.resize(no_threads);
-        struct sched_param schedParam{
-            .sched_priority = priority
-        };
+        
+        // Note: On Linux, we'll use rt_set_realtime() after thread creation
+        // On Windows, rt_set_realtime() will map to SetThreadPriority
+        // On macOS, it will be a no-op with logging
+        
         for (int32_t i = 0; i < no_threads; ++i) {
             int ret = pthread_create(&threads[i], nullptr, &ThreadPool<FuncType>::worker, this);
             if (ret != 0) {
@@ -78,7 +82,22 @@ public:
                 pthread_cond_destroy(&not_full);
                 throw std::runtime_error("Failed to create thread: " + std::string(strerror(ret)));
             }
-            pthread_setschedparam(threads[i], SCHED_FIFO, &schedParam);
+            
+#ifdef VTS_PLATFORM_LINUX
+            // Linux: Use SCHED_FIFO via pthread_setschedparam
+            struct sched_param schedParam{};
+            schedParam.sched_priority = priority;
+            int sched_ret = pthread_setschedparam(threads[i], SCHED_FIFO, &schedParam);
+            if (sched_ret != 0) {
+                std::cerr << "Warning: Failed to set thread priority (SCHED_FIFO) for thread " 
+                          << i << ": " << strerror(sched_ret) << std::endl;
+                // Continue - not fatal
+            }
+#else
+            // Windows/macOS: Priority setting handled by rt_set_realtime() in worker thread
+            // This avoids pthread_setschedparam which doesn't work the same on non-Linux
+            (void)priority;  // Will be used in worker thread
+#endif
         }
     }
 

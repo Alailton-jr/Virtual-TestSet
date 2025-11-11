@@ -31,6 +31,12 @@
     #define VTS_HAS_RAW_SOCKETS 0
     #define VTS_HAS_REALTIME 0
     #define VTS_HAS_PACKET_MMAP 0
+#elif defined(_WIN32) || defined(_WIN64) || defined(__CYGWIN__)
+    #define VTS_PLATFORM_WINDOWS
+    #define VTS_PLATFORM_NAME "Windows"
+    #define VTS_HAS_RAW_SOCKETS 0
+    #define VTS_HAS_REALTIME 0  // Windows has different RT APIs (SetThreadPriority)
+    #define VTS_HAS_PACKET_MMAP 0
 #else
     #define VTS_PLATFORM_UNKNOWN
     #define VTS_PLATFORM_NAME "Unknown"
@@ -55,11 +61,17 @@
 #endif
 
 // Compiler hints for platform-specific optimizations
-#ifdef VTS_PLATFORM_LINUX
-    // Linux-specific compiler hints
+#if defined(VTS_PLATFORM_LINUX) || defined(VTS_PLATFORM_MAC)
+    // GCC/Clang-specific compiler hints
     #define VTS_LIKELY(x)   __builtin_expect(!!(x), 1)
     #define VTS_UNLIKELY(x) __builtin_expect(!!(x), 0)
     #define VTS_PREFETCH(addr) __builtin_prefetch(addr)
+#elif defined(VTS_PLATFORM_WINDOWS) && defined(_MSC_VER)
+    // MSVC-specific hints
+    #define VTS_LIKELY(x)   (x)
+    #define VTS_UNLIKELY(x) (x)
+    #define VTS_PREFETCH(addr) _mm_prefetch((const char*)(addr), _MM_HINT_T0)
+    #include <xmmintrin.h>  // For _mm_prefetch
 #else
     // Generic fallbacks
     #define VTS_LIKELY(x)   (x)
@@ -84,7 +96,9 @@ inline const char* get_platform_info() {
 #ifdef VTS_PLATFORM_LINUX
     return "Linux (full functionality: raw sockets, RT, TPACKET_V3)";
 #elif defined(VTS_PLATFORM_MAC)
-    return "macOS (limited: no raw sockets, no RT, use --no-net mode)";
+    return "macOS (limited: no raw sockets, no Linux RT, use --no-net mode)";
+#elif defined(VTS_PLATFORM_WINDOWS)
+    return "Windows (limited: no raw sockets, best-effort RT via thread priorities)";
 #else
     return "Unknown platform (limited functionality)";
 #endif
@@ -95,16 +109,25 @@ inline bool network_operations_supported() {
 #ifdef VTS_PLATFORM_LINUX
     return true;
 #else
-    return false;
+    return false;  // Windows and macOS need --no-net mode
 #endif
 }
 
-// Check if real-time operations are supported
+// Check if real-time operations are supported (native Linux RT)
 inline bool realtime_operations_supported() {
 #ifdef VTS_PLATFORM_LINUX
     return true;
 #else
-    return false;
+    return false;  // Windows and macOS have alternative mechanisms
+#endif
+}
+
+// Check if platform has best-effort RT capabilities (thread priorities)
+inline bool has_thread_priority_support() {
+#if defined(VTS_PLATFORM_LINUX) || defined(VTS_PLATFORM_WINDOWS)
+    return true;  // Both support thread priorities
+#else
+    return false;  // macOS limited support
 #endif
 }
 

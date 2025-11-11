@@ -812,14 +812,43 @@ int main(int argc, char* argv[]){
     // Note: These calls require elevated privileges (CAP_SYS_NICE, CAP_IPC_LOCK or root)
     LOG_INFO("RT", "Initializing real-time capabilities...");
     
+    LOG_INFO("RT", "=== Platform Detection ===");
+    LOG_INFO("RT", "Platform: %s", vts::platform::get_platform_info());
+    LOG_INFO("RT", "Raw sockets supported: %s", vts::platform::network_operations_supported() ? "YES" : "NO");
+    LOG_INFO("RT", "Linux RT operations supported: %s", vts::platform::realtime_operations_supported() ? "YES" : "NO");
+    LOG_INFO("RT", "Thread priority control: %s", vts::platform::has_thread_priority_support() ? "YES" : "NO");
+    
+#ifdef VTS_PLATFORM_LINUX
+    LOG_INFO("RT", "=== Linux RT Initialization ===");
     // Lock all memory to prevent paging (critical for deterministic timing)
     rt_lock_memory();
-    
     // Set main thread to real-time priority (optional, can be done per-worker instead)
     // Uncomment if main thread needs RT priority:
     // rt_set_realtime(50);  // Lower priority than worker threads
+    LOG_INFO("RT", "Linux real-time initialization complete");
     
-    LOG_INFO("RT", "Real-time initialization complete");
+#elif defined(VTS_PLATFORM_WINDOWS)
+    LOG_INFO("RT", "=== Windows Best-Effort RT Initialization ===");
+    LOG_INFO("RT", "Windows detected - using thread priorities instead of SCHED_FIFO");
+    LOG_INFO("RT", "Performance note: Windows thread scheduling is cooperative, not deterministic");
+    // Attempt memory locking (Windows working set)
+    rt_lock_memory();
+    // Main thread priority can be set here if needed
+    // rt_set_realtime(50);
+    LOG_INFO("RT", "Windows initialization complete");
+    
+#elif defined(VTS_PLATFORM_MAC)
+    LOG_INFO("RT", "=== macOS Initialization ===");
+    LOG_INFO("RT", "macOS detected - RT features disabled (use --no-net mode)");
+    LOG_INFO("RT", "Performance note: No real-time guarantees on macOS");
+    LOG_INFO("RT", "macOS initialization complete (limited functionality)");
+    
+#else
+    LOG_WARN("RT", "=== Unknown Platform ===");
+    LOG_WARN("RT", "Platform not fully supported - expect limited functionality");
+#endif
+    
+    LOG_INFO("RT", "=================================");
     
     // Phase 11: Self-test mode
     if (config.selftest) {

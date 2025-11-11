@@ -2,6 +2,7 @@
 #include "comtrade_parser.hpp"
 #include <fstream>
 #include <cstdio>
+#include <cmath>
 
 using namespace vts::io;
 

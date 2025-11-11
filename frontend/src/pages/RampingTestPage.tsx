@@ -1,30 +1,80 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Play, Square } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Play, Square, AlertCircle } from 'lucide-react'
 import { useStreamStore } from '@/stores/useStreamStore'
+import { api } from '@/lib/api'
+import type { RampResult } from '@/lib/types'
 
 export default function RampingTestPage() {
-  const { streams } = useStreamStore()
+  const { streams, fetchStreams } = useStreamStore()
   const [selectedStreamId, setSelectedStreamId] = useState<string>('')
-  const [variable, setVariable] = useState<string>('voltage')
+  const [variable, setVariable] = useState<string>('I-A.mag')
   const [startValue, setStartValue] = useState('0')
   const [endValue, setEndValue] = useState('150')
   const [stepValue, setStepValue] = useState('5')
   const [durationSec, setDurationSec] = useState('0.5')
   const [isRunning, setIsRunning] = useState(false)
-  const [results, setResults] = useState({ pickup: 0, dropout: 0, reset: 0 })
+  const [results, setResults] = useState<RampResult | null>(null)
+  const [error, setError] = useState<string>('')
 
-  const handleStartTest = () => {
+  // Fetch streams on mount
+  useEffect(() => {
+    fetchStreams()
+  }, [fetchStreams])
+
+  // Clear error after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(''), 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [error])
+
+  const handleStartTest = async () => {
+    if (!selectedStreamId) {
+      setError('Please select a stream')
+      return
+    }
+
     setIsRunning(true)
-    setTimeout(() => {
-      setResults({ pickup: 110.5, dropout: 95.2, reset: 88.3 })
+    setError('')
+    setResults(null)
+
+    try {
+      const result = await api.runRampingTest({
+        streamId: selectedStreamId,
+        variable,
+        startValue: parseFloat(startValue),
+        endValue: parseFloat(endValue),
+        stepSize: parseFloat(stepValue),
+        stepDuration: parseFloat(durationSec) * 1000, // Convert to milliseconds
+        stopOnTrip: true,
+        findDropoff: true,
+      })
+
+      setResults(result)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to run ramping test')
+    } finally {
       setIsRunning(false)
-    }, 3000)
+    }
+  }
+
+  const handleStopTest = async () => {
+    if (!selectedStreamId) return
+
+    try {
+      await api.stopRampingTest(selectedStreamId)
+      setIsRunning(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to stop test')
+    }
   }
 
   return (
@@ -35,6 +85,13 @@ export default function RampingTestPage() {
           Automated ramping test for pickup/dropout determination
         </p>
       </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
@@ -58,8 +115,12 @@ export default function RampingTestPage() {
                 <Select value={variable} onValueChange={setVariable}>
                   <SelectTrigger id="variable"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="voltage">Voltage Magnitude</SelectItem>
-                    <SelectItem value="current">Current Magnitude</SelectItem>
+                    <SelectItem value="I-A.mag">Current A Magnitude</SelectItem>
+                    <SelectItem value="I-B.mag">Current B Magnitude</SelectItem>
+                    <SelectItem value="I-C.mag">Current C Magnitude</SelectItem>
+                    <SelectItem value="V-A.mag">Voltage A Magnitude</SelectItem>
+                    <SelectItem value="V-B.mag">Voltage B Magnitude</SelectItem>
+                    <SelectItem value="V-C.mag">Voltage C Magnitude</SelectItem>
                     <SelectItem value="frequency">Frequency</SelectItem>
                   </SelectContent>
                 </Select>
@@ -86,8 +147,17 @@ export default function RampingTestPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleStartTest} disabled={!selectedStreamId || isRunning} className="flex-1">
-                {isRunning ? <><Square className="mr-2 h-4 w-4" />Stop Test</> : <><Play className="mr-2 h-4 w-4" />Start Ramp</>}
+              <Button 
+                onClick={isRunning ? handleStopTest : handleStartTest} 
+                disabled={!selectedStreamId} 
+                className="flex-1"
+                variant={isRunning ? 'destructive' : 'default'}
+              >
+                {isRunning ? (
+                  <><Square className="mr-2 h-4 w-4" />Stop Test</>
+                ) : (
+                  <><Play className="mr-2 h-4 w-4" />Start Ramp</>
+                )}
               </Button>
             </div>
           </CardContent>
@@ -97,16 +167,40 @@ export default function RampingTestPage() {
           <CardHeader><CardTitle>Test KPIs</CardTitle><CardDescription>Key performance indicators</CardDescription></CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between p-2 border rounded">
-              <span className="text-sm font-medium">Pickup</span>
-              <Badge variant={results.pickup > 0 ? 'default' : 'outline'}>{results.pickup > 0 ? `${results.pickup} V` : 'N/A'}</Badge>
+              <span className="text-sm font-medium">Pickup Value</span>
+              <Badge variant={results?.pickupValue ? 'default' : 'outline'}>
+                {results?.pickupValue ? `${results.pickupValue.toFixed(2)}` : 'N/A'}
+              </Badge>
             </div>
+            {results?.pickupTime && (
+              <div className="flex items-center justify-between p-2 border rounded">
+                <span className="text-sm font-medium">Pickup Time</span>
+                <Badge variant="default">{results.pickupTime.toFixed(2)}ms</Badge>
+              </div>
+            )}
             <div className="flex items-center justify-between p-2 border rounded">
-              <span className="text-sm font-medium">Dropout</span>
-              <Badge variant={results.dropout > 0 ? 'default' : 'outline'}>{results.dropout > 0 ? `${results.dropout} V` : 'N/A'}</Badge>
+              <span className="text-sm font-medium">Dropoff Value</span>
+              <Badge variant={results?.dropoffValue ? 'default' : 'outline'}>
+                {results?.dropoffValue ? `${results.dropoffValue.toFixed(2)}` : 'N/A'}
+              </Badge>
             </div>
+            {results?.dropoffTime && (
+              <div className="flex items-center justify-between p-2 border rounded">
+                <span className="text-sm font-medium">Dropoff Time</span>
+                <Badge variant="default">{results.dropoffTime.toFixed(2)}ms</Badge>
+              </div>
+            )}
+            {results?.resetRatio && (
+              <div className="flex items-center justify-between p-2 border rounded">
+                <span className="text-sm font-medium">Reset Ratio</span>
+                <Badge variant="default">{(results.resetRatio * 100).toFixed(1)}%</Badge>
+              </div>
+            )}
             <div className="flex items-center justify-between p-2 border rounded">
-              <span className="text-sm font-medium">Reset</span>
-              <Badge variant={results.reset > 0 ? 'default' : 'outline'}>{results.reset > 0 ? `${results.reset} V` : 'N/A'}</Badge>
+              <span className="text-sm font-medium">Trip Status</span>
+              <Badge variant={results?.tripped ? 'destructive' : 'outline'}>
+                {results?.tripped ? 'Tripped' : 'No Trip'}
+              </Badge>
             </div>
           </CardContent>
         </Card>

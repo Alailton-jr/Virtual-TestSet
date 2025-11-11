@@ -1,12 +1,29 @@
+cmake_minimum_required(VERSION 3.20)
 
-cmake_minimum_required(VERSION 3.5)
+# Policy to allow linking to targets defined in subdirectories
+cmake_policy(SET CMP0079 NEW)
 
-project(Virtual-TestSet VERSION 1.0)
+project(Virtual-TestSet)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/build)
+
+# Platform Detection
+if(UNIX AND NOT APPLE)
+    set(VTS_PLATFORM "LINUX")
+    message(STATUS "Detected platform: Linux")
+elseif(WIN32)
+    set(VTS_PLATFORM "WINDOWS")
+    message(STATUS "Detected platform: Windows")
+elseif(APPLE)
+    set(VTS_PLATFORM "MAC")
+    message(STATUS "Detected platform: macOS")
+else()
+    set(VTS_PLATFORM "UNKNOWN")
+    message(WARNING "Unknown platform detected - expect limited functionality")
+endif()
 
 # Strict compiler warnings (Werror removed globally to allow third-party libraries)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wdouble-promotion")
@@ -85,4 +102,24 @@ add_test(NAME basic_help_test
          WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 set_tests_properties(basic_help_test PROPERTIES
                      WILL_FAIL TRUE)  # Expected to fail until --help is implemented
+
+# Platform-specific library linking
+if(VTS_PLATFORM STREQUAL "LINUX")
+    # Linux: pthread and rt libraries
+    find_package(Threads REQUIRED)
+    target_link_libraries(Main rt)
+    message(STATUS "Linking Linux libraries: pthread, rt")
+    
+elseif(VTS_PLATFORM STREQUAL "WINDOWS")
+    # Windows: Winsock and threading libraries
+    target_link_libraries(Main ws2_32 winmm)
+    message(STATUS "Linking Windows libraries: ws2_32, winmm")
+    
+elseif(VTS_PLATFORM STREQUAL "MAC")
+    # macOS: pthread (already linked in src/main/CMakeLists.txt)
+    message(STATUS "Linking macOS libraries: pthread")
+endif()
+
+# Platform-specific compile definitions
+target_compile_definitions(Main PRIVATE VTS_PLATFORM_${VTS_PLATFORM})
 
