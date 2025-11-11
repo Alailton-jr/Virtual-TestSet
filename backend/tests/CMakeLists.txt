@@ -32,6 +32,7 @@ add_executable(vts_tests
     test_impedance_calculator.cpp
     test_ramping_tester.cpp
     test_overcurrent_tester.cpp
+    network_integration_test.cpp
     # test_distance_tester.cpp - TODO: Create tests for distance tester
     # test_differential_tester.cpp - TODO: Create tests for differential tester
     # test_threadpool.cpp - TODO: Adapt to ThreadPool's submit() API with function arguments
@@ -74,3 +75,4 @@ add_test(NAME MAC_Parser COMMAND vts_tests --gtest_filter=MACParserTest.*)
 add_test(NAME smpCnt_Wrap COMMAND vts_tests --gtest_filter=SmpCntWrapTest.*)
 add_test(NAME ThreadPool COMMAND vts_tests --gtest_filter=ThreadPoolTest.*)
 add_test(NAME TripRuleEvaluator COMMAND vts_tests --gtest_filter=TripRuleEvaluatorTest.*)
+add_test(NAME NetworkIntegration COMMAND vts_tests --gtest_filter=NetworkIntegrationTest.*)

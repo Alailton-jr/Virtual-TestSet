@@ -79,6 +79,8 @@ export function Sidebar({ className }: SidebarProps) {
                 <h3 className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-400">
                   {section.name}
                 </h3>
+                {/* add a separator line here */}
+                <hr className="border-gray-300 dark:border-gray-700 mx-4" />
                 {section.items.map((item) => {
                   const isActive = location.pathname === item.href
                   return (

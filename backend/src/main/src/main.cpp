@@ -1,7 +1,7 @@
 
 #include "main.hpp"
 #include "compat.hpp"
-#include "raw_socket.hpp"
+#include "raw_socket_platform.hpp"  // Use platform-aware selector instead of raw_socket.hpp
 #include "rt_utils.hpp"
 #include "logger.hpp"
 #include "metrics.hpp"
@@ -887,8 +887,9 @@ int main(int argc, char* argv[]){
     }
 
     // Start TCP server (can run without network I/O)
-    TCPServer server(8080);
-    server.start();
+    // NOTE: TCPServer is legacy - commented out to allow HTTPServer/WebSocket to start
+    // TCPServer server(8080);
+    // server.start();
     
     // Initialize HTTP server and SV Publisher Manager
     LOG_INFO("HTTP", "Initializing HTTP API server and SV Publisher Manager...");

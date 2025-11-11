@@ -3,6 +3,15 @@
 #include <vector>
 #include <cstdint>
 #include <nlohmann/json.hpp>
+#include "compat.hpp"  // Must include first for platform detection
+
+#ifdef __APPLE__
+#include "bpf_macos.hpp"
+#endif
+
+#ifdef _WIN32
+#include "npcap_windows.hpp"
+#endif
 
 enum class DataSource {
     MANUAL,
@@ -33,6 +42,14 @@ class SVPublisherInstance {
 public:
     SVPublisherInstance(const std::string& id, const SVConfig& config);
     ~SVPublisherInstance();
+
+    // Delete copy constructor and copy assignment (instance owns resources)
+    SVPublisherInstance(const SVPublisherInstance&) = delete;
+    SVPublisherInstance& operator=(const SVPublisherInstance&) = delete;
+
+    // Allow move operations (we manage this manually in the implementation)
+    SVPublisherInstance(SVPublisherInstance&& other) noexcept;
+    SVPublisherInstance& operator=(SVPublisherInstance&& other) noexcept;
 
     // Control
     void start();
@@ -66,7 +83,14 @@ private:
     std::vector<Phasor> phasors_;
     nlohmann::json harmonics_;
     uint32_t sampleCounter_;
-    int rawSocket_;
+    
+#ifdef __APPLE__
+    vts::platform::BPFSocket* bpfSocket_;  // BPF socket for macOS
+#endif
+#ifdef _WIN32
+    vts::platform::NpcapSocket* npcapSocket_;  // Npcap socket for Windows
+#endif
+    int rawSocket_;  // Linux raw socket fd, BPF fd on macOS, or Npcap handle on Windows
 
     void sendSVPacket();
     std::vector<int16_t> generateSamples();

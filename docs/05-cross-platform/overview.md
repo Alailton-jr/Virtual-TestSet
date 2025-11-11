@@ -6,15 +6,16 @@ The Virtual TestSet has been designed to run on **Linux, Windows, and macOS** wi
 
 ## Platform Support Matrix
 
-| Feature | Linux | Windows | macOS |
-|---------|-------|---------|-------|
-| Raw Sockets (AF_PACKET) | ✅ Full | ❌ No | ❌ No |
-| Real-Time Scheduling (SCHED_FIFO) | ✅ Full | ⚠️ Best-effort | ❌ No |
-| Thread Priorities | ✅ SCHED_FIFO | ✅ SetThreadPriority | ⚠️ Limited |
-| CPU Affinity | ✅ Full | ✅ Affinity Mask | ❌ No |
-| Memory Locking | ✅ mlockall | ⚠️ Working Set | ❌ No |
-| Network Operations | ✅ Full | ⚠️ --no-net | ⚠️ --no-net |
-| Performance | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐ |
+| Feature | Linux | Windows (Native) | macOS (Native) | Docker (All) |
+|---------|-------|------------------|----------------|--------------|
+| Raw Sockets | ✅ AF_PACKET | ✅ Npcap | ✅ BPF | ⚠️ Limited |
+| Real-Time Scheduling | ✅ SCHED_FIFO | ⚠️ Best-effort | ❌ No | ❌ No |
+| Thread Priorities | ✅ SCHED_FIFO | ✅ SetThreadPriority | ⚠️ Limited | ⚠️ Limited |
+| CPU Affinity | ✅ Full | ✅ Affinity Mask | ❌ No | ⚠️ Limited |
+| Memory Locking | ✅ mlockall | ⚠️ Working Set | ❌ No | ⚠️ Limited |
+| Network Operations | ✅ Full | ✅ Full (Npcap) | ✅ Full (sudo) | ⚠️ Limited |
+| Packet Latency | **<10µs** | **<200µs** | **<100µs** | **1-5ms** |
+| Performance | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐ |
 
 ### Legend
 - ✅ **Full**: Complete functionality with native APIs
@@ -57,9 +58,63 @@ cpuset: "2,3"      # Pin to isolated CPUs
 
 ---
 
-### Windows (Best-Effort RT)
+### macOS (Native Build with BPF)
 
 **Capabilities:**
+- **Raw Socket I/O**: Berkeley Packet Filter (BPF) for GOOSE/SV transmission
+- **BPF Devices**: Access to `/dev/bpf0` through `/dev/bpf255`
+- **Interface Binding**: Bind to specific network interfaces (en0, en1, etc.)
+- **Packet Filtering**: BPF filter programs for protocol-specific capture
+- **Thread Priorities**: Limited priority adjustment (no SCHED_FIFO)
+
+**Requirements:**
+- **Root/Sudo**: BPF devices require elevated privileges
+- **macOS 11.0+**: Big Sur or later
+- **Native Build**: Must compile directly on macOS (not in Docker)
+
+**BPF Implementation:**
+```cpp
+// Virtual TestSet uses BPFSocket wrapper class
+vts::platform::BPFSocket bpf;
+bpf.open("en0");                    // Bind to interface
+bpf.setPromiscuous(true);           // Enable promiscuous mode
+bpf.write(packet_data, length);     // Send raw Ethernet frame
+auto data = bpf.read();             // Read packets
+```
+
+**Limitations:**
+- No real-time scheduling (no SCHED_FIFO on macOS)
+- No CPU affinity control
+- No memory locking
+- Higher latency than Linux RT kernel
+- Requires sudo for network operations
+
+**Docker on macOS:**
+- Docker Desktop runs in a Linux VM
+- Cannot access host BPF devices
+- Must use `--no-net` mode in Docker
+- Native build required for network functionality
+
+**Performance:**
+- Packet latency: <100µs (best case)
+- Timing jitter: ~50µs (typical)
+- Throughput: Near line-rate (limited by BPF buffer)
+
+**Use Case:**
+- Development/testing on macOS workstations with network I/O
+- Functional testing of GOOSE/SV protocols
+- COMTRADE playback to network
+- Not suitable for timing-critical applications
+
+---
+
+### Windows (Native Build with Npcap)
+
+**Capabilities:**
+- **Raw Socket I/O**: Npcap (WinPcap successor) for GOOSE/SV transmission
+- **Packet Capture**: `pcap_open_live()` for device access
+- **Packet Injection**: `pcap_sendpacket()` for raw Ethernet frames
+- **BPF Filtering**: `pcap_compile()` and `pcap_setfilter()` support
 - **Thread Priorities**: Maps Linux priority (1-99) to Windows classes:
   - Priority 90-99 → `REALTIME_PRIORITY_CLASS` + `THREAD_PRIORITY_TIME_CRITICAL`
   - Priority 70-89 → `HIGH_PRIORITY_CLASS` + `THREAD_PRIORITY_HIGHEST`
@@ -69,11 +124,80 @@ cpuset: "2,3"      # Pin to isolated CPUs
 - **Memory Locking**: `SetProcessWorkingSetSize()` (512 MB default)
 - **Sleep Timing**: `QueryPerformanceCounter()` + spin-wait for sub-ms precision
 
+**Requirements:**
+- **Npcap**: Must be installed from https://npcap.com/
+  - **IMPORTANT**: Install in "WinPcap API-compatible Mode"
+  - Includes wpcap.dll and packet.dll
+- **Visual Studio 2022**: Or Build Tools for Visual Studio 2022
+- **CMake 3.20+**: For build system
+- **Administrator**: May be required for packet injection (optional for capture)
+
+**Npcap Implementation:**
+```cpp
+// Virtual TestSet uses NpcapSocket wrapper class
+vts::platform::NpcapSocket npcap;
+npcap.open("\\Device\\NPF_{...}");  // Open network device
+npcap.setPromiscuous(true);         // Enable promiscuous mode
+npcap.write(packet_data, length);   // Send raw Ethernet frame
+auto data = npcap.read();           // Read packets (non-blocking)
+```
+
+**Build Instructions:**
+```bash
+cd backend
+cmake -S . -B build -G "Visual Studio 17 2022"
+cmake --build build --config Release
+
+# Run tests
+cd build
+ctest -C Release
+
+# Run application
+.\bin\Release\vts.exe
+```
+
 **Limitations:**
-- No raw sockets → **Requires `--no-net` mode**
+- Cooperative scheduling (not preemptive RT like Linux)
+- Higher latency than Linux (~200µs vs <10µs)
+- Npcap must be manually installed
+- May require Administrator privileges for packet injection
+
+**Performance:**
+- Packet latency: **<200µs** (typical)
+- Timing jitter: ~100µs (best case)
+- Throughput: Near line-rate (Npcap-limited)
+
+**Use Case:**
+- Native Windows development with full network I/O
+- Testing GOOSE/SV protocols on Windows
+- COMTRADE playback to network
+- Integration testing on Windows machines
+- Better performance than Docker (5-10x faster)
+
+**Verification with Wireshark:**
+```bash
+# Filter for SV packets (EtherType 0x88BA)
+eth.type == 0x88ba
+
+# Or GOOSE packets (EtherType 0x88B8)
+eth.type == 0x88b8
+```
+
+---
+
+### Windows (Docker - No Network)
+
+**Capabilities:**
+- **Thread Priorities**: Maps Linux priority (1-99) to Windows classes (same as native)
+- **CPU Affinity**: `SetThreadAffinityMask()` for thread-to-core binding
+- **Memory Locking**: `SetProcessWorkingSetSize()` (512 MB default)
+- **Sleep Timing**: `QueryPerformanceCounter()` + spin-wait for sub-ms precision
+
+**Limitations:**
+- **No raw sockets in Docker** → **Requires `--no-net` mode**
+- Cannot access Npcap from Docker container
 - Cooperative scheduling (not preemptive RT)
-- No deterministic latency guarantees
-- Higher jitter than Linux
+- Higher jitter than native build
 
 **Docker on Windows:**
 ```dockerfile
@@ -93,13 +217,15 @@ FROM mcr.microsoft.com/windows/nanoserver:ltsc2022
 - Throughput: N/A
 
 **Use Case:**
-- Development/testing on Windows workstations
 - CI/CD pipelines on Windows runners
-- Non-network operations (e.g., COMTRADE file analysis)
+- Non-network operations (e.g., COMTRADE file analysis, configuration validation)
+- Testing without network hardware
+
+**Recommendation:** Use **native build with Npcap** for better performance and full network functionality.
 
 ---
 
-### macOS (No-Net Mode)
+### macOS (Docker - No Network)
 
 **Capabilities:**
 - **BPF Access**: Available but not used (requires root)

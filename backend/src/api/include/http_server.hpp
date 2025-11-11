@@ -84,6 +84,7 @@ private:
     void handleSequenceResume(const httplib::Request& req, httplib::Response& res);
     
     // GOOSE endpoints (Module 4)
+    void handleGooseGetSubscriptions(const httplib::Request& req, httplib::Response& res);
     void handleGooseScan(const httplib::Request& req, httplib::Response& res);
     void handleGooseConfig(const httplib::Request& req, httplib::Response& res);
     
@@ -106,6 +107,9 @@ private:
     
     // Differential test endpoints (Module 11)
     void handleDifferentialRun(const httplib::Request& req, httplib::Response& res);
+    
+    // System/Configuration endpoints
+    void handleGetNetworkInterfaces(const httplib::Request& req, httplib::Response& res);
     
     // Utility functions
     void sendJsonResponse(httplib::Response& res, int status, const json& data);

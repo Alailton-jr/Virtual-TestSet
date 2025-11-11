@@ -8,6 +8,7 @@ target_include_directories(vts_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
     PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/platform/include 
         ${CMAKE_SOURCE_DIR}/third_party/json/include
 )
 

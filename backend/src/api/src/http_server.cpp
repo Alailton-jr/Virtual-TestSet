@@ -9,6 +9,10 @@
 #include "overcurrent_tester.hpp"
 #include "differential_tester.hpp"
 #include "global_flags.hpp"
+#include "compat.hpp"
+#ifdef VTS_PLATFORM_MAC
+#include "bpf_macos.hpp"
+#endif
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -125,6 +129,10 @@ void HTTPServer::setupRoutes() {
     });
     
     // GOOSE endpoints (Module 4)
+    server_->Get("/api/v1/goose/subscriptions", [this](const httplib::Request& req, httplib::Response& res) {
+        handleGooseGetSubscriptions(req, res);
+    });
+    
     server_->Post("/api/v1/goose/scan", [this](const httplib::Request& req, httplib::Response& res) {
         handleGooseScan(req, res);
     });
@@ -169,6 +177,11 @@ void HTTPServer::setupRoutes() {
     // Differential test endpoint (Module 11)
     server_->Post("/api/v1/differential/run", [this](const httplib::Request& req, httplib::Response& res) {
         handleDifferentialRun(req, res);
+    });
+    
+    // System/Configuration endpoints
+    server_->Get("/api/v1/system/network-interfaces", [this](const httplib::Request& req, httplib::Response& res) {
+        handleGetNetworkInterfaces(req, res);
     });
 }
 
@@ -654,6 +667,12 @@ void HTTPServer::handleSequenceResume(const httplib::Request& /*req*/, httplib::
 }
 
 // GOOSE endpoints
+void HTTPServer::handleGooseGetSubscriptions(const httplib::Request& /*req*/, httplib::Response& res) {
+    // TODO: Return actual GOOSE subscriptions from GOOSE engine
+    // For now, return empty array to prevent 404 errors in frontend
+    sendJsonResponse(res, 200, {{"subscriptions", json::array()}});
+}
+
 void HTTPServer::handleGooseScan(const httplib::Request& /*req*/, httplib::Response& res) {
     // TODO: Scan for GOOSE messages
     sendJsonResponse(res, 200, {{"entries", json::array()}});
@@ -1256,6 +1275,40 @@ void HTTPServer::sendErrorResponse(httplib::Response& res, int status, const std
         {"timestamp", std::time(nullptr)}
     };
     sendJsonResponse(res, status, error);
+}
+
+void HTTPServer::handleGetNetworkInterfaces(const httplib::Request& /*req*/, httplib::Response& res) {
+#ifdef VTS_PLATFORM_MAC
+    // Get detailed interface information on macOS
+    auto interfaces = vts::platform::getNetworkInterfacesDetailed();
+    
+    json interfacesList = json::array();
+    for (const auto& iface : interfaces) {
+        json ifaceJson = {
+            {"name", iface.name},
+            {"active", iface.isActive},
+            {"macAddress", iface.macAddress.empty() ? nullptr : iface.macAddress},
+            {"ipAddress", iface.ipAddress.empty() ? nullptr : iface.ipAddress}
+        };
+        interfacesList.push_back(ifaceJson);
+    }
+    
+    json response = {
+        {"interfaces", interfacesList},
+        {"platform", "macOS"}
+    };
+    
+    sendJsonResponse(res, 200, response);
+#else
+    // Stub implementation for other platforms
+    json response = {
+        {"interfaces", json::array()},
+        {"platform", "unsupported"},
+        {"message", "Network interface detection not implemented for this platform"}
+    };
+    
+    sendJsonResponse(res, 200, response);
+#endif
 }
 
 bool HTTPServer::validateJson(const json& /*data*/, const std::string& /*schemaName*/) {

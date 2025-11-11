@@ -93,8 +93,9 @@ class ApiClient {
   // ============================================================================
 
   async getStreams(): Promise<Stream[]> {
-    const response = await this.request<StreamsResponse>('/streams')
-    return response.streams
+    const response = await this.request<StreamsResponse | Stream[]>('/streams')
+    // Backend currently returns array directly, but StreamsResponse expects {streams: [...]}
+    return Array.isArray(response) ? response : response.streams
   }
 
   async getStream(id: string): Promise<Stream> {
@@ -403,11 +404,24 @@ class ApiClient {
   // ============================================================================
 
   async getSequenceStatus(): Promise<{ running: boolean; currentStep?: number; totalSteps?: number }> {
-    return this.request('/sequences/status')
+    const response = await this.request<{ status: string; currentState: number; totalElapsed: number; stateElapsed: number }>('/sequences/status')
+    // Backend returns { status: "idle" | "running", ... }
+    // Transform to match frontend expectation
+    return {
+      running: response.status === 'running',
+      currentStep: response.currentState >= 0 ? response.currentState : undefined,
+      totalSteps: undefined, // Backend doesn't provide this
+    }
   }
 
   async getAnalyzerStatus(): Promise<{ active: boolean; streamId?: string }> {
-    return this.request('/analyzer/status')
+    const response = await this.request<{ running: boolean; streamMac: string }>('/analyzer/status')
+    // Backend returns { running: boolean, streamMac: string }
+    // Transform to match frontend expectation
+    return {
+      active: response.running,
+      streamId: response.streamMac || undefined,
+    }
   }
 
   // ============================================================================
@@ -421,6 +435,18 @@ class ApiClient {
   getLogsWebSocket(): WebSocket {
     const wsUrl = this.baseUrl.replace(/^http/, 'ws').replace(/\/api\/v1$/, '/ws/logs')
     return new WebSocket(wsUrl)
+  }
+
+  async getNetworkInterfaces(): Promise<{
+    interfaces: Array<{
+      name: string
+      active: boolean
+      macAddress?: string
+      ipAddress?: string
+    }>
+    platform: string
+  }> {
+    return this.request('/system/network-interfaces')
   }
 }
 

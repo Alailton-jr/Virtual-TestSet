@@ -6,14 +6,26 @@ This guide helps you get started implementing the Virtual TestSet project based 
 
 ### System Requirements
 
-- **Operating System**: Linux (Ubuntu 22.04+ recommended) or macOS
+- **Operating System**: Linux (Ubuntu 22.04+), macOS (11.0+), or Windows (10/11 with Npcap)
 - **CPU**: Multi-core processor (4+ cores recommended)
 - **RAM**: 8GB minimum, 16GB recommended
 - **Disk**: 20GB free space
+- **Network**: Ethernet adapter for network testing (optional for development)
+
+### Deployment Options
+
+Virtual TestSet can be run in two ways:
+
+| Method | Performance | Setup | Network I/O | Best For |
+|--------|-------------|-------|-------------|----------|
+| **Native Build** | ⭐⭐⭐⭐⭐ (10-200µs) | Medium | ✅ Full | Production, performance testing |
+| **Docker** | ⭐⭐ (1-5ms) | Easy | ⚠️ Limited | Development, CI/CD |
+
+**Recommendation:** Use **native builds** for 5-25x better performance and full network capabilities!
 
 ### Software Dependencies
 
-#### For Backend Development
+#### For Native Builds (Recommended)
 
 ```bash
 # Ubuntu/Debian
@@ -57,6 +69,106 @@ docker compose version  # Should be v2.20.0+
 ```
 
 ## Quick Start
+
+### Choose Your Path
+
+**Path A: Native Build (Best Performance)** ⭐ Recommended for production
+- 5-25x faster than Docker (<10-200µs latency vs 1-5ms)
+- Full network packet injection/capture
+- Real hardware testing capabilities
+- See [Native Build Setup Guide](../02-setup/native-build-guide.md)
+
+**Path B: Docker (Easiest Setup)**
+- No manual dependencies
+- Consistent environment
+- Good for development and CI/CD
+- Instructions below
+
+### Path A: Native Build Quick Start
+
+#### Linux
+
+```bash
+# 1. Install dependencies
+sudo apt-get install -y build-essential cmake git libpcap-dev libfftw3-dev nodejs npm
+
+# 2. Clone repository
+git clone https://github.com/Alailton-jr/Virtual-TestSet.git
+cd Virtual-TestSet
+
+# 3. Build backend
+cd backend
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
+
+# 4. Build frontend
+cd ../frontend
+npm install
+npm run dev  # Access at http://localhost:5173
+
+# 5. Run backend (in another terminal)
+cd ../backend/build
+sudo ./Main  # or use: sudo setcap cap_net_raw+ep ./Main && ./Main
+```
+
+#### macOS
+
+```bash
+# 1. Install dependencies
+brew install cmake ninja libpcap fftw node
+
+# 2. Clone repository
+git clone https://github.com/Alailton-jr/Virtual-TestSet.git
+cd Virtual-TestSet
+
+# 3. Build backend
+cd backend
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+
+# 4. Build frontend
+cd ../frontend
+npm install
+npm run dev  # Access at http://localhost:5173
+
+# 5. Run backend (in another terminal)
+cd ../backend/build
+sudo ./Main  # Requires sudo for BPF device access
+```
+
+#### Windows
+
+```powershell
+# 1. Install prerequisites:
+#    - Visual Studio 2022 (with C++ workload)
+#    - CMake 3.20+
+#    - Npcap from https://npcap.com/ (in WinPcap API-compatible Mode)
+#    - Node.js 18+
+
+# 2. Clone repository
+git clone https://github.com/Alailton-jr/Virtual-TestSet.git
+cd Virtual-TestSet
+
+# 3. Build backend (in "x64 Native Tools Command Prompt for VS 2022")
+cd backend
+cmake -S . -B build -G "Visual Studio 17 2022"
+cmake --build build --config Release
+
+# 4. Build frontend
+cd ..\frontend
+npm install
+npm run dev  # Access at http://localhost:5173
+
+# 5. Run backend (in another terminal, may need Administrator)
+cd ..\backend\build\bin\Release
+.\Main.exe
+```
+
+**For detailed native build instructions:** See [Native Build Setup Guide](../02-setup/native-build-guide.md)
+
+---
+
+### Path B: Docker Quick Start
 
 ### 1. Clone the Repository
 

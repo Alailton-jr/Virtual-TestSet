@@ -35,9 +35,9 @@ void Logger::initImpl(LogLevel level, const std::string& filename) {
     
     initialized_ = true;
     
-    // Log initialization using printf-style formatting
-    log("LOGGER", LogLevel::INFO, "Logger initialized (level=%s, file=%s)", 
-        logLevelToString(level), filename.empty() ? "console" : filename.c_str());
+    // Don't call log() here - would cause deadlock since we're already holding mutex_
+    std::cout << "[LOGGER] Logger initialized (level=" << logLevelToString(level) 
+              << ", file=" << (filename.empty() ? "console" : filename) << ")" << std::endl;
 }
 
 // Shutdown logger
@@ -49,7 +49,8 @@ void Logger::shutdownImpl() {
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (initialized_) {
-        log("LOGGER", LogLevel::INFO, "Logger shutting down");
+        // Don't call log() here - would cause deadlock since we're already holding mutex_
+        std::cout << "[LOGGER] Logger shutting down" << std::endl;
         
         if (fileOutput_ && logFile_.is_open()) {
             logFile_.flush();
@@ -67,7 +68,8 @@ void Logger::setLogLevel(LogLevel level) {
 
 void Logger::setLogLevelImpl(LogLevel level) {
     minLevel_.store(level, std::memory_order_relaxed);
-    log("LOGGER", LogLevel::INFO, "Log level changed to %s", logLevelToString(level));
+    // Don't call log() here - would cause deadlock since we're already holding mutex_ in some callers
+    std::cout << "[LOGGER] Log level changed to " << logLevelToString(level) << std::endl;
 }
 
 // Get log level

@@ -20,21 +20,23 @@
 
 // Platform detection
 #if defined(__linux__)
-    #define VTS_PLATFORM_LINUX
+    #define VTS_PLATFORM_LINUX 1
     #define VTS_PLATFORM_NAME "Linux"
     #define VTS_HAS_RAW_SOCKETS 1
     #define VTS_HAS_REALTIME 1
     #define VTS_HAS_PACKET_MMAP 1
 #elif defined(__APPLE__) && defined(__MACH__)
-    #define VTS_PLATFORM_MAC
+    #define VTS_PLATFORM_MAC 1
     #define VTS_PLATFORM_NAME "macOS"
-    #define VTS_HAS_RAW_SOCKETS 0
+    #define VTS_HAS_RAW_SOCKETS 1  // Using BPF for raw packet I/O
+    #define VTS_HAS_BPF 1          // Berkeley Packet Filter support
     #define VTS_HAS_REALTIME 0
     #define VTS_HAS_PACKET_MMAP 0
 #elif defined(_WIN32) || defined(_WIN64) || defined(__CYGWIN__)
-    #define VTS_PLATFORM_WINDOWS
+    #define VTS_PLATFORM_WINDOWS 1
     #define VTS_PLATFORM_NAME "Windows"
-    #define VTS_HAS_RAW_SOCKETS 0
+    #define VTS_HAS_RAW_SOCKETS 1  // Using Npcap for raw packet I/O
+    #define VTS_HAS_NPCAP 1         // Npcap/WinPcap support
     #define VTS_HAS_REALTIME 0  // Windows has different RT APIs (SetThreadPriority)
     #define VTS_HAS_PACKET_MMAP 0
 #else

@@ -2,20 +2,24 @@
 #include <cstring>
 #include <cmath>
 #include <stdexcept>
+#include <iostream>
+
+#ifdef __linux__
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-
-#ifdef __linux__
 #include <linux/if_packet.h>
 #include <linux/if_ether.h>
 #elif defined(__APPLE__)
-#include <net/if_dl.h>
-#include <net/bpf.h>
-#include <fcntl.h>  // For open() and O_RDWR
+#include <unistd.h>
+#include "bpf_macos.hpp"  // Use our new BPF wrapper
+#elif defined(_WIN32)
+#include "npcap_windows.hpp"  // Use Npcap wrapper for Windows
+#define htons(x) _byteswap_ushort(x)
+#define htonl(x) _byteswap_ulong(x)
 #endif
 
 // SV protocol constants
@@ -29,6 +33,12 @@ SVPublisherInstance::SVPublisherInstance(const std::string& id, const SVConfig& 
     , config_(config)
     , running_(false)
     , sampleCounter_(0)
+#ifdef __APPLE__
+    , bpfSocket_(nullptr)
+#endif
+#ifdef _WIN32
+    , npcapSocket_(nullptr)
+#endif
     , rawSocket_(-1)
 {
     // Initialize with zero phasors if manual mode
@@ -46,6 +56,61 @@ SVPublisherInstance::~SVPublisherInstance() {
     closeRawSocket();
 }
 
+// Move constructor
+SVPublisherInstance::SVPublisherInstance(SVPublisherInstance&& other) noexcept
+    : id_(std::move(other.id_))
+    , config_(std::move(other.config_))
+    , running_(other.running_)
+    , phasors_(std::move(other.phasors_))
+    , harmonics_(std::move(other.harmonics_))
+    , sampleCounter_(other.sampleCounter_)
+#ifdef __APPLE__
+    , bpfSocket_(other.bpfSocket_)
+#endif
+#ifdef _WIN32
+    , npcapSocket_(other.npcapSocket_)
+#endif
+    , rawSocket_(other.rawSocket_)
+{
+    // Take ownership of resources
+#ifdef __APPLE__
+    other.bpfSocket_ = nullptr;
+#endif
+#ifdef _WIN32
+    other.npcapSocket_ = nullptr;
+#endif
+    other.rawSocket_ = -1;
+}
+
+// Move assignment operator
+SVPublisherInstance& SVPublisherInstance::operator=(SVPublisherInstance&& other) noexcept {
+    if (this != &other) {
+        // Clean up existing resources
+        stop();
+        closeRawSocket();
+        
+        // Move data
+        id_ = std::move(other.id_);
+        config_ = std::move(other.config_);
+        running_ = other.running_;
+        phasors_ = std::move(other.phasors_);
+        harmonics_ = std::move(other.harmonics_);
+        sampleCounter_ = other.sampleCounter_;
+        
+#ifdef __APPLE__
+        bpfSocket_ = other.bpfSocket_;
+        other.bpfSocket_ = nullptr;
+#endif
+#ifdef _WIN32
+        npcapSocket_ = other.npcapSocket_;
+        other.npcapSocket_ = nullptr;
+#endif
+        rawSocket_ = other.rawSocket_;
+        other.rawSocket_ = -1;
+    }
+    return *this;
+}
+
 void SVPublisherInstance::initRawSocket() {
 #ifdef __linux__
     // Create raw socket for sending Ethernet frames (Linux)
@@ -55,52 +120,82 @@ void SVPublisherInstance::initRawSocket() {
     }
 #elif defined(__APPLE__)
     // On macOS, use BPF (Berkeley Packet Filter) for raw packet access
-    // Try to open /dev/bpf devices (0-99)
-    for (int i = 0; i < 100; i++) {
-        char bpf_dev[32];
-        snprintf(bpf_dev, sizeof(bpf_dev), "/dev/bpf%d", i);
-        rawSocket_ = open(bpf_dev, O_RDWR);
-        if (rawSocket_ >= 0) {
-            break;
-        }
+    bpfSocket_ = new vts::platform::BPFSocket();
+    
+    // Get available network interfaces
+    auto interfaces = vts::platform::getNetworkInterfaces();
+    if (interfaces.empty()) {
+        delete bpfSocket_;
+        bpfSocket_ = nullptr;
+        throw std::runtime_error("No network interfaces available");
     }
     
-    if (rawSocket_ < 0) {
-        throw std::runtime_error("Failed to open BPF device (requires root): " + std::string(strerror(errno)));
+    // Try to open the first available interface (typically en0)
+    std::string interface = interfaces[0];
+    std::cout << "[SV Publisher] Using network interface: " << interface << std::endl;
+    
+    if (!bpfSocket_->open(interface)) {
+        delete bpfSocket_;
+        bpfSocket_ = nullptr;
+        throw std::runtime_error("Failed to open BPF socket (requires sudo)");
     }
     
-    // Set immediate mode (don't wait for buffer to fill)
-    unsigned int enable = 1;
-    if (ioctl(rawSocket_, BIOCIMMEDIATE, &enable) < 0) {
-        close(rawSocket_);
-        throw std::runtime_error("Failed to set BPF immediate mode: " + std::string(strerror(errno)));
+    // Set header complete mode for sending
+    rawSocket_ = bpfSocket_->getFd();
+    
+    std::cout << "[SV Publisher] BPF socket initialized on " << interface << std::endl;
+#elif defined(_WIN32)
+    // On Windows, use Npcap for raw packet access
+    npcapSocket_ = new vts::platform::NpcapSocket();
+    
+    // Get available network interfaces
+    auto interfaces = vts::platform::getNetworkInterfacesWithNames();
+    if (interfaces.empty()) {
+        delete npcapSocket_;
+        npcapSocket_ = nullptr;
+        throw std::runtime_error("No network interfaces available (Is Npcap installed?)");
     }
     
-    // Get buffer length
-    unsigned int buflen;
-    if (ioctl(rawSocket_, BIOCGBLEN, &buflen) < 0) {
-        close(rawSocket_);
-        throw std::runtime_error("Failed to get BPF buffer length: " + std::string(strerror(errno)));
+    // Try to open the first available interface
+    std::string interface = interfaces[0].first;
+    std::string friendlyName = interfaces[0].second;
+    std::cout << "[SV Publisher] Using network interface: " << friendlyName << std::endl;
+    
+    if (!npcapSocket_->open(interface)) {
+        delete npcapSocket_;
+        npcapSocket_ = nullptr;
+        throw std::runtime_error("Failed to open Npcap socket (requires Npcap and may need Administrator)");
     }
     
-    // Bind to first available network interface
-    // In production, you'd want to specify the interface or detect it
-    struct ifreq ifr;
-    strncpy(ifr.ifr_name, "en0", IFNAMSIZ);  // Typically the default ethernet/wifi on macOS
-    if (ioctl(rawSocket_, BIOCSETIF, &ifr) < 0) {
-        close(rawSocket_);
-        throw std::runtime_error("Failed to bind BPF to interface en0: " + std::string(strerror(errno)));
-    }
+    rawSocket_ = 0;  // Dummy value for Windows
+    
+    std::cout << "[SV Publisher] Npcap socket initialized on " << friendlyName << std::endl;
 #else
     #error "Unsupported platform for raw sockets"
 #endif
 }
 
 void SVPublisherInstance::closeRawSocket() {
+#ifdef __APPLE__
+    if (bpfSocket_ != nullptr) {
+        delete bpfSocket_;
+        bpfSocket_ = nullptr;
+    }
+#endif
+#ifdef _WIN32
+    if (npcapSocket_ != nullptr) {
+        delete npcapSocket_;
+        npcapSocket_ = nullptr;
+    }
+#endif
+#ifdef __linux__
     if (rawSocket_ >= 0) {
         close(rawSocket_);
         rawSocket_ = -1;
     }
+#else
+    rawSocket_ = -1;
+#endif
 }
 
 void SVPublisherInstance::start() {
@@ -256,11 +351,23 @@ void SVPublisherInstance::sendSVPacket() {
     }
 #elif defined(__APPLE__)
     // On macOS, use BPF write() to send raw Ethernet frame
-    ssize_t sent = write(rawSocket_, frame, offset);
-    
-    if (sent < 0) {
-        // Ignore send errors - they happen if interface is down or permissions issue
-        // In production, log this error
+    if (bpfSocket_ != nullptr && bpfSocket_->isOpen()) {
+        ssize_t sent = bpfSocket_->write(frame, offset);
+        
+        if (sent < 0) {
+            // Ignore send errors - they happen if interface is down or permissions issue
+            // In production, log this error
+        }
+    }
+#elif defined(_WIN32)
+    // On Windows, use Npcap write() to send raw Ethernet frame
+    if (npcapSocket_ != nullptr && npcapSocket_->isOpen()) {
+        ssize_t sent = npcapSocket_->write(frame, offset);
+        
+        if (sent < 0) {
+            // Ignore send errors - they happen if interface is down or permissions issue
+            // In production, log this error
+        }
     }
 #endif
 }

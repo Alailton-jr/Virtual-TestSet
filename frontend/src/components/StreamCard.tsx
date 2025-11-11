@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Play, Square, Edit, Trash2, Radio } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -81,7 +81,7 @@ export function StreamCard({ stream, onStart, onStop, onEdit, onDelete }: Stream
               </div>
               <div>
                 <CardTitle className="text-lg">{stream.name}</CardTitle>
-                <CardDescription className="flex items-center gap-2 mt-1">
+                <div className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
                   <span>{stream.svID}</span>
                   <Badge 
                     variant={isRunning ? 'default' : 'secondary'}
@@ -91,7 +91,7 @@ export function StreamCard({ stream, onStart, onStop, onEdit, onDelete }: Stream
                   >
                     {isRunning ? 'Running' : 'Stopped'}
                   </Badge>
-                </CardDescription>
+                </div>
               </div>
             </div>
 

@@ -1,7 +1,7 @@
 
 #include "transient.hpp"
 
-#include "raw_socket.hpp"
+#include "raw_socket_platform.hpp"  // Use platform-aware selector instead of raw_socket.hpp
 #include "signal_processing.hpp"
 #include "timers.hpp"
 #include "tests.hpp"

@@ -1,6 +1,91 @@
-# Running Virtual TestSet on macOS with Docker
+# Running Virtual TestSet on macOS
 
-## 🚀 Quick Start
+## 🎯 Overview
+
+Virtual TestSet can run on macOS in two modes:
+
+1. **Native Build with BPF** (Recommended for network testing)
+   - Requires sudo privileges
+   - Full network packet capture and transmission
+   - Best performance and functionality
+   - Requires macOS build from source
+
+2. **Docker Mode** (Good for development)
+   - No sudo required
+   - Limited network functionality (--no-net mode)
+   - Easier setup
+   - Good for UI development and non-network features
+
+---
+
+## 🔥 Native macOS Build with BPF (Full Network Support)
+
+### Prerequisites
+
+- macOS 11.0 (Big Sur) or later
+- Xcode Command Line Tools
+- CMake 3.20+
+- Homebrew (for dependencies)
+
+### Install Dependencies
+
+```bash
+brew install cmake nlohmann-json crow
+```
+
+### Build
+
+```bash
+cd backend
+mkdir build && cd build
+cmake ..
+make -j$(sysctl -n hw.ncpu)
+```
+
+### Run with Network Support
+
+**Important:** BPF requires root privileges (sudo) to access `/dev/bpf*` devices.
+
+```bash
+# Run backend with sudo for network access
+sudo ./bin/Main
+
+# In another terminal, run tests
+sudo ./bin/vts_tests
+```
+
+### Available Network Interfaces
+
+To list available network interfaces:
+
+```bash
+networksetup -listallhardwareports
+# or
+ifconfig | grep -E "^[a-z]" | cut -d: -f1
+```
+
+Common interfaces on macOS:
+- `en0` - Primary Ethernet/Wi-Fi
+- `en1` - Secondary network adapter
+- `bridge0` - Virtual bridge interface
+
+### Limitations
+
+- **Requires sudo**: BPF devices (`/dev/bpf*`) require root access
+- **Interface selection**: Backend automatically selects first available interface (typically `en0`)
+- **Firewall**: May need to allow the application through macOS firewall
+
+### Security Notes
+
+Running with sudo gives the application full network access. Only run code you trust.
+
+---
+
+## 🚀 Docker Mode (Limited Network)
+
+This mode runs backend in `--no-net` mode, suitable for development without network I/O.
+
+### Quick Start
 
 ### Start Both Frontend and Backend
 

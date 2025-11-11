@@ -39,6 +39,15 @@ export function Dashboard() {
           api.getAnalyzerStatus(),
         ])
 
+        // Debug logging
+        console.log('[Dashboard] API responses:', {
+          health: health.status === 'fulfilled' ? health.value : health.reason,
+          streams: streams.status === 'fulfilled' ? streams.value : streams.reason,
+          gooseData: gooseData.status === 'fulfilled' ? gooseData.value : gooseData.reason,
+          sequenceStatus: sequenceStatus.status === 'fulfilled' ? sequenceStatus.value : sequenceStatus.reason,
+          analyzerStatus: analyzerStatus.status === 'fulfilled' ? analyzerStatus.value : analyzerStatus.reason,
+        })
+
         // Process health check
         const backendStatus = health.status === 'fulfilled' ? 'connected' : 'disconnected'
         const backendVersion = health.status === 'fulfilled' ? health.value.version : 'Unknown'
