@@ -452,6 +452,50 @@ valgrind --leak-check=full ./build/vts --selftest
 
 ---
 
+## 📚 Documentation
+
+Complete documentation is organized in the `docs/` folder:
+
+### Overview
+- [Getting Started](docs/00-overview/getting-started.md) - Installation, prerequisites, and first steps
+
+### Architecture
+- [System Overview](docs/01-architecture/system-overview.md) - High-level system architecture
+- [Backend Architecture](docs/01-architecture/backend-architecture.md) - C++ backend design and components
+- [Frontend Architecture](docs/01-architecture/frontend-architecture.md) - React frontend design and components
+
+### Setup & Configuration
+- [Docker on macOS](docs/02-setup/docker-macos-guide.md) - Running Virtual TestSet in Docker on macOS
+- [macOS Network Setup](docs/02-setup/macos-network-setup.md) - Network configuration for macOS development
+- [macOS BPF/WebSocket Notes](docs/02-setup/macos-bpf-websocket.md) - Technical notes on BPF and WebSocket support
+
+### Backend
+- [Monitoring Setup](docs/03-backend/monitoring-setup.md) - Backend monitoring and logging configuration
+- [Logs & Monitoring](docs/03-backend/logs-and-monitoring.md) - Real-time log streaming and monitoring
+- [Integration Status](docs/03-backend/integration-status.md) - Current backend integration status
+- [COMTRADE Parser](docs/03-backend/comtrade-parser.md) - COMTRADE file format and parser implementation
+
+### Frontend
+- [Backend Integration](docs/04-frontend/backend-integration.md) - Frontend-backend API integration guide
+- [Pages Guide](docs/04-frontend/pages.md) - Complete guide to all frontend pages with routes and purposes
+
+### Cross-Platform Support
+- [Overview](docs/05-cross-platform/overview.md) - Comprehensive cross-platform implementation guide
+- [Quick Reference](docs/05-cross-platform/quick-reference.md) - Quick commands and configuration for Linux/Windows/macOS
+
+### Testing
+- [Tests Quick Start](docs/06-tests/tests-quick-start.md) - Quick guide to running tests
+- [Unit Tests](docs/06-tests/unit-tests.md) - Unit test implementation and coverage
+- [E2E Verification](docs/06-tests/e2e-verification.md) - End-to-end test verification guide
+
+### Roadmap
+- [Project Roadmap](docs/07-roadmap/roadmap.md) - Future plans and feature roadmap
+
+### Archive
+Historical implementation logs and detailed progress reports are available in `docs/98-archive/` for reference.
+
+---
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
