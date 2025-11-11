@@ -323,6 +323,11 @@ std::vector<NetworkInterfaceInfo> getNetworkInterfacesDetailed() {
     std::map<std::string, NetworkInterfaceInfo> ifaceMap;
     
     for (struct ifaddrs* ifa = ifap; ifa != nullptr; ifa = ifa->ifa_next) {
+        // Safety check: skip if name is null
+        if (!ifa->ifa_name) {
+            continue;
+        }
+        
         std::string name(ifa->ifa_name);
         
         // Skip loopback and virtual interfaces
@@ -340,6 +345,8 @@ std::vector<NetworkInterfaceInfo> getNetworkInterfacesDetailed() {
         if (ifaceMap.find(name) == ifaceMap.end()) {
             NetworkInterfaceInfo info;
             info.name = name;
+            info.macAddress = "";
+            info.ipAddress = "";
             info.isActive = false;
             ifaceMap[name] = info;
         }

@@ -1279,26 +1279,36 @@ void HTTPServer::sendErrorResponse(httplib::Response& res, int status, const std
 
 void HTTPServer::handleGetNetworkInterfaces(const httplib::Request& /*req*/, httplib::Response& res) {
 #ifdef VTS_PLATFORM_MAC
-    // Get detailed interface information on macOS
-    auto interfaces = vts::platform::getNetworkInterfacesDetailed();
-    
-    json interfacesList = json::array();
-    for (const auto& iface : interfaces) {
-        json ifaceJson = {
-            {"name", iface.name},
-            {"active", iface.isActive},
-            {"macAddress", iface.macAddress.empty() ? nullptr : iface.macAddress},
-            {"ipAddress", iface.ipAddress.empty() ? nullptr : iface.ipAddress}
+    try {
+        std::cout << "[HTTP] Getting network interfaces..." << std::endl;
+        
+        // Get detailed interface information on macOS
+        auto interfaces = vts::platform::getNetworkInterfacesDetailed();
+        
+        std::cout << "[HTTP] Found " << interfaces.size() << " interfaces" << std::endl;
+        
+        json interfacesList = json::array();
+        for (const auto& iface : interfaces) {
+            json ifaceJson = {
+                {"name", iface.name},
+                {"active", iface.isActive},
+                {"macAddress", iface.macAddress.empty() ? json() : json(iface.macAddress)},
+                {"ipAddress", iface.ipAddress.empty() ? json() : json(iface.ipAddress)}
+            };
+            interfacesList.push_back(ifaceJson);
+        }
+        
+        json response = {
+            {"interfaces", interfacesList},
+            {"platform", "macOS"}
         };
-        interfacesList.push_back(ifaceJson);
+        
+        std::cout << "[HTTP] Sending response..." << std::endl;
+        sendJsonResponse(res, 200, response);
+    } catch (const std::exception& e) {
+        std::cerr << "[HTTP] Error getting network interfaces: " << e.what() << std::endl;
+        sendErrorResponse(res, 500, std::string("Failed to get network interfaces: ") + e.what());
     }
-    
-    json response = {
-        {"interfaces", interfacesList},
-        {"platform", "macOS"}
-    };
-    
-    sendJsonResponse(res, 200, response);
 #else
     // Stub implementation for other platforms
     json response = {
